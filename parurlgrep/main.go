@@ -52,7 +52,7 @@ func main() {
 
 	// --
 	// TODO:
-	//  - untangle ugly mess
+	//  - untangle the ugly mess
 	//  - ensure upper bound for the number of simultaneously invoked goroutines
 	wait_ch := make(chan struct{}, 2)
 	tasks_num := 0
