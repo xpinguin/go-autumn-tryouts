@@ -1,10 +1,10 @@
 package main
 
 import (
-	//"os"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"regexp"
 )
@@ -17,9 +17,8 @@ func reCountMatches(re *regexp.Regexp, text []byte) int {
 		if _next == nil {
 			break
 		}
-		_start = _start + _next[1]
-		//
-		matches_num = matches_num + 1
+		_start += _next[1]
+		matches_num++
 	}
 	return matches_num
 }
@@ -35,7 +34,7 @@ func UrlData(url string) []byte {
 
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		fmt.Printf("{ERR} ReadAll(R) -> err(%s), R = %s\n", err, r.Body)
+		log.Printf("{ERR} ReadAll(R) -> err(%s), R = %s\n", err, r.Body)
 		return nil
 	}
 
@@ -45,40 +44,72 @@ func UrlData(url string) []byte {
 ///// MAIN /////
 func main() {
 	// --
-	E_NODATA = errors.New("NO DATA")
-	_reUrlCountMatches := func (re, url) (int, error) {
-		url_data := UrlData(url)
-		if url_data == nil {
-			return nil, E_NODATA
-		}
-		return reCountMatches(cnt_re, url_data), nil
-	}
-	
-	// --
 	// TODO: use "flag" package, receive from system arguments
-	cnt_re, _ = regexp.Compile("Go")
-	
+	cnt_re, err := regexp.Compile("Go")
+	if err != nil || cnt_re == nil {
+		panic(err)
+	}
+
 	// --
 	// TODO:
-	//	- goroutine + buffered channel
-	//	- revert back the nonsensical `_reUrlCountMatches` func,
-	//	  to an anonymous lambda binding
+	//  - untangle ugly mess
+	//  - ensure upper bound for the number of simultaneously invoked goroutines
+	wait_ch := make(chan struct{}, 2)
+	tasks_num := 0
+
+	stopped := false
+_MainLoop:
 	for {
-		url := ""
-		// --
-		n, err := fmt.Scanln(&url)
-		if err == io.EOF {
-			break
+		select {
+		case _, ok := <-wait_ch:
+			if ok {
+				if tasks_num <= 0 {
+					panic(tasks_num)
+				}
+				tasks_num--
+			} else {
+				log.Printf("DONE")
+				break _MainLoop
+			}
+
+		default:
+			if stopped {
+				if tasks_num == 0 {
+					close(wait_ch)
+				}
+				continue
+			}
+
+			var url string
+
+			// -- read url
+			n, err := fmt.Scanln(&url)
+			if err == io.EOF {
+				//break _MainLoop
+				//???close(wait_ch)
+				stopped = true
+				continue
+			}
+			if n < 1 {
+				continue
+			} else if n > 1 {
+				log.Printf("{WARN} Scanln -> %d, %s\n", n, err)
+				continue
+			}
+
+			// -- process url
+			go func(url string, n chan<- struct{}) {
+				url_data := UrlData(url)
+				if url_data == nil {
+					log.Printf("| %s: NO DATA\n", url)
+					return
+				}
+				log.Printf("| %s: %d\n", url, reCountMatches(cnt_re, url_data))
+				// notify
+
+				n <- struct{}{}
+			}(url, wait_ch)
+			tasks_num++
 		}
-		if n < 1 {
-			continue
-		} else if n > 1 {
-			fmt.Printf("{WARN} Scanln -> %d, %s\n", n, err)
-			continue
-		}
-		// --
-		fmt.Printf(">> %s: NO DATA\n", url)
-		
-		fmt.Printf(">> %s: %d\n", url, )
 	}
 }
