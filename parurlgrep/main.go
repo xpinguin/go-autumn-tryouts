@@ -9,6 +9,14 @@ import (
 	"regexp"
 )
 
+func ReCompile(re_src string) *regexp.Regexp {
+	re, err := regexp.Compile(re_src)
+	if err != nil || re == nil {
+		panic(err)
+	}
+	return re
+}
+
 func ReCountMatches(re *regexp.Regexp, text []byte) int {
 	matches_num := 0
 	_start := 0
@@ -69,10 +77,7 @@ func StartUrlsChannel(r io.Reader) <-chan string {
 func main() {
 	// --
 	// TODO: use "flag" package, receive from system arguments
-	cnt_re, err := regexp.Compile("Go")
-	if err != nil || cnt_re == nil {
-		panic(err)
-	}
+	cnt_re := ReCompile("Go")
 
 	// --
 	// TODO:
