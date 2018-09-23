@@ -16,7 +16,7 @@ var (
 
 /// TESTS ///
 func TestUrlsChannel(t *T.T) {
-	input := NewStringReader(S.Join(URLs, "\n"))
+	input := S.NewReader(S.Join(URLs, "\n"))
 	// --
 	url_i := 0
 	for url := range StartUrlsChannel(input) {
@@ -41,7 +41,7 @@ func TestConcurrentUrlMatcher(t *T.T) {
 	match_re := ReCompile("Go")
 
 	// --
-	input := NewStringReader(S.Repeat(S.Join(URLs, "\n")+"\n", 7))
+	input := S.NewReader(S.Repeat(S.Join(URLs, "\n")+"\n", 7))
 	urls_chan := StartUrlsChannel(input)
 	
 	// --
