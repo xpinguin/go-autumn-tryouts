@@ -9,7 +9,7 @@ import (
 	"regexp"
 )
 
-func reCountMatches(re *regexp.Regexp, text []byte) int {
+func ReCountMatches(re *regexp.Regexp, text []byte) int {
 	matches_num := 0
 	_start := 0
 	for {
@@ -39,6 +39,30 @@ func UrlData(url string) []byte {
 	}
 
 	return data
+}
+
+func StartUrlsChannel(r io.Reader) <-chan string {
+	urls_chan := make(chan string)
+	go func(urls_chan chan<- string) {
+		var url string
+		for {
+			// read url
+			n, err := fmt.Fscanln(r, &url)
+			if err == io.EOF {
+				close(urls_chan)
+				return
+			}
+			if n < 1 {
+				continue
+			} else if n > 1 {
+				log.Printf("{WARN} Scanln -> %d, %s\n", n, err)
+				continue
+			}
+			//
+			urls_chan <- url
+		}
+	}(urls_chan)
+	return urls_chan
 }
 
 ///// MAIN /////
@@ -104,7 +128,7 @@ _MainLoop:
 					log.Printf("| %s: NO DATA\n", url)
 					return
 				}
-				log.Printf("| %s: %d\n", url, reCountMatches(cnt_re, url_data))
+				log.Printf("| %s: %d\n", url, ReCountMatches(cnt_re, url_data))
 				// notify
 
 				n <- struct{}{}
