@@ -11,6 +11,7 @@ import (
 	"regexp"
 )
 
+///////////
 func ReCompile(re_src string) *regexp.Regexp {
 	re, err := regexp.Compile(re_src)
 	if err != nil || re == nil {
@@ -33,6 +34,7 @@ func ReCountMatches(re *regexp.Regexp, text []byte) int {
 	return matches_num
 }
 
+///////////
 func UrlData(url string) []byte {
 	r, err := http.Get(url)
 	if r != nil {
@@ -51,6 +53,7 @@ func UrlData(url string) []byte {
 	return data
 }
 
+///////////
 func StartUrlsChannel(r io.Reader) <-chan string {
 	urls_chan := make(chan string)
 	go func(urls_chan chan<- string) {
@@ -75,36 +78,38 @@ func StartUrlsChannel(r io.Reader) <-chan string {
 	return urls_chan
 }
 
-func UrlMatchCountParallel(re *regexp.Regexp,
-	urls <-chan string, max_workers int) (total_matches int) {
-	// --
-	type URLMatches struct {
-		url          string
-		url_has_data bool
-		matches_num  int
-	}
+///////////
+type URLMatches struct {
+	url          string
+	url_has_data bool
+	matches_num  int
+}
 
-	urlmatch_chan := make(chan URLMatches, max_workers)
+func RunUrlMatchCounter(re *regexp.Regexp,
+	urls <-chan string, max_workers int, on_match func(URLMatches)) {
+	// --
+	urlmatch_chan := make(chan URLMatches, 1000 /* max workers */)
+	defer close(urlmatch_chan)
 
 	// --
 	urls_chan_closed := false
 	tasks_scheduled := 0
+	worker_sem := make(chan struct{}, max_workers)
+	log.Println(max_workers)
+	defer close(worker_sem)
 
 	for tasks_scheduled > 0 || !urls_chan_closed {
-		//fmt.Println(tasks_scheduled)
 		select {
 		case m, ok := <-urlmatch_chan:
 			if !ok {
 				tasks_scheduled = 0
 				continue
 			}
-			if m.url_has_data {
-				fmt.Printf("Count for %s: %d\n", m.url, m.matches_num)
-				total_matches += m.matches_num
-			} else {
-				fmt.Printf("Count for %s: NO DATA RETRIEVED\n", m.url)
-			}
+			/// !!!!
+			on_match(m)
+			/// !!!!
 			tasks_scheduled--
+			log.Printf("------- tasks_scheduled = %d", tasks_scheduled)
 
 		case url, ok := <-urls:
 			//fmt.Printf(">> url (%t): %s\n", ok, url)
@@ -112,9 +117,15 @@ func UrlMatchCountParallel(re *regexp.Regexp,
 				urls_chan_closed = true
 				continue
 			}
+			worker_sem <- struct{}{}
 
 			tasks_scheduled++
+			log.Printf("+++++++ tasks_scheduled = %d", tasks_scheduled)
+
+			///
 			go func(url string, resch chan<- URLMatches) {
+				defer func() { <-worker_sem }()
+				///
 				url_data := UrlData(url)
 				if url_data == nil {
 					resch <- URLMatches{url, false, 0}
@@ -124,11 +135,6 @@ func UrlMatchCountParallel(re *regexp.Regexp,
 			}(url, urlmatch_chan)
 		}
 	}
-	close(urlmatch_chan)
-
-	// TODO: move printf to the calling side
-	fmt.Printf("Total: %d\n", total_matches)
-	return
 }
 
 ///// MAIN /////
@@ -149,9 +155,21 @@ func main() {
 	//log.Println(match_re_src, *max_workers_num)
 
 	// --
-	_ = UrlMatchCountParallel(
+	total_matches := 0
+
+	RunUrlMatchCounter(
 		ReCompile(match_re_src),
 		StartUrlsChannel(os.Stdin),
 		*max_workers_num,
+		func(m URLMatches) {
+			if m.url_has_data {
+				fmt.Printf("Count for %s: %d\n", m.url, m.matches_num)
+				total_matches += m.matches_num
+			} else {
+				fmt.Printf("Count for %s: NO DATA RETRIEVED\n", m.url)
+			}
+		},
 	)
+
+	fmt.Printf("Total: %d", total_matches)
 }

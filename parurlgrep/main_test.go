@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	//"log"
 	T "testing"
 	"time"
 )
@@ -41,20 +41,25 @@ func TestUrlsChannel(t *T.T) {
 }
 
 func TestConcurrentUrlMatcher(t *T.T) {
-	max_workers := 3
-	input := S.NewReader(S.Repeat(S.Join(URLs, "\n")+"\n", 7))
+	max_workers := 5
+	input := S.NewReader(S.Repeat(S.Join(URLs, "\n")+"\n", 25))
 
-	UrlMatchCountParallel(
+	RunUrlMatchCounter(
 		ReCompile("Go"),
 		StartUrlsChannel(input),
 		max_workers,
+		func(m URLMatches) {
+			if m.url_has_data {
+				t.Logf("Count for %s: %d\n", m.url, m.matches_num)
+			}
+		},
 	)
 }
 
 func TestMaxWorkersForUrlMatcher(t *T.T) {
 	// --
-	max_workers := 3
-	input := S.NewReader(S.Repeat(S.Join(URLs, "\n")+"\n", 7))
+	max_workers := 5
+	input := S.NewReader(S.Repeat(S.Join(URLs, "\n")+"\n", 25))
 
 	//total_urls := len(URLs) * max_workers
 
@@ -62,21 +67,21 @@ func TestMaxWorkersForUrlMatcher(t *T.T) {
 	goro_measuremnent_ctl := make(chan struct{})
 
 	// --
-	log.Printf("Goros[2]: %d", runtime.NumGoroutine())
+	t.Logf("Goros[2]: %d", runtime.NumGoroutine())
 	urls := StartUrlsChannel(input)
-	log.Printf("Goros[3]: %d", runtime.NumGoroutine())
+	t.Logf("Goros[3]: %d", runtime.NumGoroutine())
 
 	// --
-	log.Printf("Goros[1]: %d", runtime.NumGoroutine())
+	t.Logf("Goros[1]: %d", runtime.NumGoroutine())
 	go func(start_stop chan struct{}, interval time.Duration, precall_goros, goros_delta_threshold int) {
-		log.Printf("PreCall Goros: %d", precall_goros)
+		t.Logf("PreCall Goros: %d", precall_goros)
 
 		var goros0, goros int
 
 		measure := func() (goros_delta int) {
 			goros = runtime.NumGoroutine()
 			goros_delta = goros - goros0
-			log.Printf("Goros[...]: %d // goros-goros0 = %d", goros, goros_delta)
+			t.Logf("Goros[...]: %d // goros-goros0 = %d", goros, goros_delta)
 			if goros_delta_threshold < goros_delta {
 				t.Errorf("goroutines (delta) upper bound violated: %d > %d", goros_delta, goros_delta_threshold)
 			}
@@ -85,8 +90,8 @@ func TestMaxWorkersForUrlMatcher(t *T.T) {
 
 		<-start_stop
 		goros0 = runtime.NumGoroutine()
-		log.Printf("goros0 = %d (?== %d)", goros0, runtime.NumGoroutine())
-		log.Printf("Goros[START]: %d", runtime.NumGoroutine())
+		t.Logf("goros0 = %d (?== %d)", goros0, runtime.NumGoroutine())
+		t.Logf("Goros[START]: %d", runtime.NumGoroutine())
 		// guaranteed final one
 		defer measure()
 
@@ -101,15 +106,23 @@ func TestMaxWorkersForUrlMatcher(t *T.T) {
 	}(goro_measuremnent_ctl, 50*time.Millisecond, runtime.NumGoroutine(), max_workers)
 
 	// --
+	total := 0
+
 	goro_measuremnent_ctl <- struct{}{}
-	total := UrlMatchCountParallel(
+	RunUrlMatchCounter(
 		ReCompile("Go"),
 		urls,
 		max_workers,
+		func(m URLMatches) {
+			if m.url_has_data {
+				t.Logf("Count for %s: %d\n", m.url, m.matches_num)
+				total++
+			}
+		},
 	)
 	<-goro_measuremnent_ctl
 
 	// --
-	log.Printf("Total matches: %d", total)
+	t.Logf("Total matches: %d", total)
 
 }
