@@ -2,7 +2,8 @@ package main
 
 import T "testing"
 import S "strings"
-import "fmt"
+
+//import "fmt"
 
 /// TEST DATA ///
 var (
@@ -35,59 +36,11 @@ func TestUrlsChannel(t *T.T) {
 }
 
 func TestConcurrentUrlMatcher(t *T.T) {
-	// --
-	match_re := ReCompile("Go")
-
-	// --
 	input := S.NewReader(S.Repeat(S.Join(URLs, "\n")+"\n", 7))
-	urls_chan := StartUrlsChannel(input)
 
-	// --
-	type URLMatches struct {
-		url          string
-		url_has_data bool
-		matches_num  int
-	}
-	urlmatch_chan := make(chan URLMatches, 2)
-
-	// --
-	urls_chan_closed := false
-	tasks_scheduled := 0
-
-	for tasks_scheduled > 0 || !urls_chan_closed {
-		//fmt.Println(tasks_scheduled)
-		select {
-		case m, ok := <-urlmatch_chan:
-			//fmt.Printf("fgfgfg")
-			if !ok {
-				tasks_scheduled = 0
-				continue
-			}
-			if m.url_has_data {
-				fmt.Printf("| %s: %d\n", m.url, m.matches_num)
-			} else {
-				fmt.Printf("| %s: NO DATA\n", m.url)
-			}
-			tasks_scheduled--
-
-		case url, ok := <-urls_chan:
-			//fmt.Printf(">> url (%t): %s\n", ok, url)
-			if !ok {
-				urls_chan_closed = true
-				continue
-			}
-
-			tasks_scheduled++
-			go func(url string, resch chan<- URLMatches) {
-				url_data := UrlData(url)
-				if url_data == nil {
-					resch <- URLMatches{url, false, 0}
-					return
-				}
-				resch <- URLMatches{url, true, ReCountMatches(match_re, url_data)}
-			}(url, urlmatch_chan)
-
-		}
-	}
-	close(urlmatch_chan)
+	UrlMatchCountParallel(
+		ReCompile("Go"),
+		StartUrlsChannel(input),
+		5,
+	)
 }

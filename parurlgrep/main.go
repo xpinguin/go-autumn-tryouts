@@ -1,11 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 )
 
@@ -73,72 +75,79 @@ func StartUrlsChannel(r io.Reader) <-chan string {
 	return urls_chan
 }
 
+func UrlMatchCountParallel(re *regexp.Regexp,
+	urls <-chan string, max_workers int) {
+	// --
+	type URLMatches struct {
+		url          string
+		url_has_data bool
+		matches_num  int
+	}
+
+	urlmatch_chan := make(chan URLMatches, max_workers)
+
+	// --
+	urls_chan_closed := false
+	tasks_scheduled := 0
+
+	for tasks_scheduled > 0 || !urls_chan_closed {
+		//fmt.Println(tasks_scheduled)
+		select {
+		case m, ok := <-urlmatch_chan:
+			if !ok {
+				tasks_scheduled = 0
+				continue
+			}
+			if m.url_has_data {
+				fmt.Printf("| %s: %d\n", m.url, m.matches_num)
+			} else {
+				fmt.Printf("| %s: NO DATA\n", m.url)
+			}
+			tasks_scheduled--
+
+		case url, ok := <-urls:
+			//fmt.Printf(">> url (%t): %s\n", ok, url)
+			if !ok {
+				urls_chan_closed = true
+				continue
+			}
+
+			tasks_scheduled++
+			go func(url string, resch chan<- URLMatches) {
+				url_data := UrlData(url)
+				if url_data == nil {
+					resch <- URLMatches{url, false, 0}
+					return
+				}
+				resch <- URLMatches{url, true, ReCountMatches(re, url_data)}
+			}(url, urlmatch_chan)
+		}
+	}
+	close(urlmatch_chan)
+}
+
 ///// MAIN /////
 func main() {
 	// --
-	// TODO: use "flag" package, receive from system arguments
-	cnt_re := ReCompile("Go")
+	var match_re_src string
+	default_match_re_src := flag.String("", "Go", "pattern to match (re2)")
+	max_workers_num := flag.Int("k", 5, "maximum number of workers")
+
+	flag.Parse()
+	if flag.NArg() > 1 {
+		flag.Usage()
+		log.Fatal(flag.Args())
+	} else if match_re_src = flag.Arg(0); match_re_src == "" {
+		match_re_src = *default_match_re_src
+	}
+
+	//log.Println(match_re_src, *max_workers_num)
 
 	// --
-	// TODO:
-	//  - untangle the ugly mess
-	//  - ensure upper bound for the number of simultaneously invoked goroutines
-	wait_ch := make(chan struct{}, 2)
-	tasks_num := 0
+	UrlMatchCountParallel(
+		ReCompile(match_re_src),
+		StartUrlsChannel(os.Stdin),
+		*max_workers_num,
+	)
 
-	stopped := false
-_MainLoop:
-	for {
-		select {
-		case _, ok := <-wait_ch:
-			if ok {
-				if tasks_num <= 0 {
-					panic(tasks_num)
-				}
-				tasks_num--
-			} else {
-				log.Printf("DONE")
-				break _MainLoop
-			}
-
-		default:
-			if stopped {
-				if tasks_num == 0 {
-					close(wait_ch)
-				}
-				continue
-			}
-
-			var url string
-
-			// -- read url
-			n, err := fmt.Scanln(&url)
-			if err == io.EOF {
-				//break _MainLoop
-				//???close(wait_ch)
-				stopped = true
-				continue
-			}
-			if n < 1 {
-				continue
-			} else if n > 1 {
-				log.Printf("{WARN} Scanln -> %d, %s\n", n, err)
-				continue
-			}
-
-			// -- process url
-			go func(url string, n chan<- struct{}) {
-				url_data := UrlData(url)
-				if url_data == nil {
-					log.Printf("| %s: NO DATA\n", url)
-					return
-				}
-				log.Printf("| %s: %d\n", url, ReCountMatches(cnt_re, url_data))
-				// notify
-
-				n <- struct{}{}
-			}(url, wait_ch)
-			tasks_num++
-		}
-	}
 }
