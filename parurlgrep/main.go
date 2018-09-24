@@ -76,7 +76,7 @@ func StartUrlsChannel(r io.Reader) <-chan string {
 }
 
 func UrlMatchCountParallel(re *regexp.Regexp,
-	urls <-chan string, max_workers int) {
+	urls <-chan string, max_workers int) (total_matches int) {
 	// --
 	type URLMatches struct {
 		url          string
@@ -99,9 +99,10 @@ func UrlMatchCountParallel(re *regexp.Regexp,
 				continue
 			}
 			if m.url_has_data {
-				fmt.Printf("| %s: %d\n", m.url, m.matches_num)
+				fmt.Printf("Count for %s: %d\n", m.url, m.matches_num)
+				total_matches += m.matches_num
 			} else {
-				fmt.Printf("| %s: NO DATA\n", m.url)
+				fmt.Printf("Count for %s: NO DATA RETRIEVED\n", m.url)
 			}
 			tasks_scheduled--
 
@@ -124,6 +125,10 @@ func UrlMatchCountParallel(re *regexp.Regexp,
 		}
 	}
 	close(urlmatch_chan)
+
+	// TODO: move printf to the calling side
+	fmt.Printf("Total: %d\n", total_matches)
+	return
 }
 
 ///// MAIN /////
@@ -144,10 +149,9 @@ func main() {
 	//log.Println(match_re_src, *max_workers_num)
 
 	// --
-	UrlMatchCountParallel(
+	_ = UrlMatchCountParallel(
 		ReCompile(match_re_src),
 		StartUrlsChannel(os.Stdin),
 		*max_workers_num,
 	)
-
 }
