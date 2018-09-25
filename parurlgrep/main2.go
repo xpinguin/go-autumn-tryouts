@@ -4,9 +4,6 @@ import (
 	//"flag"
 	"fmt"
 	"io"
-
-	//"log"
-
 	"regexp"
 )
 
@@ -29,6 +26,18 @@ func ReCountMatchesURL(re *regexp.Regexp, in URL) (int, bool) {
 	return ReCountMatches(re, urlReader), true
 }
 
+///////////
+func PrintMatchCountForURL(url URL, mcnt *int) {
+	if mcnt == nil {
+		fmt.Printf("Count for %s: NO DATA\n", url)
+		return
+	}
+	fmt.Printf("Count for %s: %d\n", url, *mcnt)
+}
+
+///////////
+type InputURLsChan = <-chan URL
+
 ///// MAIN /////
 func main() {
 	// --
@@ -44,9 +53,9 @@ func main() {
 	for _, url := range urls {
 		if m, ok := ReCountMatchesURL(match_re, url); ok {
 			total += m
-			fmt.Printf("Count for %s: %d\n", url, m)
+			PrintMatchCountForURL(url, &m)
 		} else {
-			fmt.Printf("Count for %s: NO DATA\n", url)
+			PrintMatchCountForURL(url, nil)
 		}
 	}
 	fmt.Printf("Total count: %d", total)
