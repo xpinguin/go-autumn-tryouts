@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"log"
 	"net/http"
 )
@@ -21,19 +22,9 @@ func Min(x0 int, xs ...int) int {
 type URL = string
 
 type URLReader struct {
-	url        URL
-	bodyReader *bufio.Reader
-	_resp      *http.Response
-}
-
-func (ur URLReader) Close() { ur._resp.Body.Close() }
-
-// TODO: subclassing: employ interface somehow
-func (ur URLReader) Read(p []byte) (int, error) {
-	return ur.bodyReader.Read(p)
-}
-func (ur URLReader) ReadRune() (rune, int, error) {
-	return ur.bodyReader.ReadRune()
+	URL
+	io.ReadCloser
+	io.RuneReader
 }
 
 func URLGet(url URL) *URLReader {
@@ -42,9 +33,5 @@ func URLGet(url URL) *URLReader {
 		log.Printf("ERROR: http.Get(%s): %v", url, err)
 		return nil
 	}
-	return &URLReader{
-		url:        url,
-		_resp:      r,
-		bodyReader: bufio.NewReader(r.Body),
-	}
+	return &URLReader{url, r.Body, bufio.NewReader(r.Body)}
 }
