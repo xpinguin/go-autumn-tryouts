@@ -53,10 +53,11 @@ func UrlData(url string) []byte {
 	return data
 }
 
-///////////
+// StartUrlsChannel :: IO () -> Chan string
 func StartUrlsChannel(r io.Reader) <-chan string {
 	urls_chan := make(chan string)
-	go func(urls_chan chan<- string) {
+	///
+	go func(urls_chan chan<- string) { // _ :: Chan string -> IO ()
 		var url string
 		for {
 			// read url
@@ -75,6 +76,7 @@ func StartUrlsChannel(r io.Reader) <-chan string {
 			urls_chan <- url
 		}
 	}(urls_chan)
+	///
 	return urls_chan
 }
 
@@ -85,15 +87,17 @@ type URLMatches struct {
 	matches_num  int
 }
 
+// RunUrlMatchCounter :: Regexp -> Chan u -> Int -> Chan m
 func RunUrlMatchCounter(re *regexp.Regexp,
 	urls <-chan string, max_workers int, on_match func(URLMatches)) {
 	// --
-	urlmatch_chan := make(chan URLMatches, 1000 /* max workers */)
+	urlmatch_chan := make(chan URLMatches, 1000)
 	defer close(urlmatch_chan)
 
 	// --
 	urls_chan_closed := false
 	tasks_scheduled := 0
+
 	worker_sem := make(chan struct{}, max_workers)
 	log.Println(max_workers)
 	defer close(worker_sem)
@@ -123,6 +127,7 @@ func RunUrlMatchCounter(re *regexp.Regexp,
 			log.Printf("+++++++ tasks_scheduled = %d", tasks_scheduled)
 
 			///
+			// :: string -> Chan m -> IO ()
 			go func(url string, resch chan<- URLMatches) {
 				defer func() { <-worker_sem }()
 				///
