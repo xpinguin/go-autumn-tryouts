@@ -1,9 +1,11 @@
 package main
 
 import (
-	//"flag"
+	"flag"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"regexp"
 )
 
@@ -68,25 +70,66 @@ func PrintMatchCountForURL(url URL, mcnt *int) {
 ///////////
 type InputURLsChan = <-chan URL
 
+///////////
+// StartUrlsChannel :: IO () -> Chan URL
+func StartUrlsChannel(r io.Reader) <-chan URL {
+	urls_chan := make(chan URL)
+	///
+	go func(urls_chan chan<- URL) { // _ :: Chan URL -> IO ()
+		var url URL
+		for {
+			// read url
+			n, err := fmt.Fscanln(r, &url)
+			if err == io.EOF {
+				close(urls_chan)
+				return
+			}
+			if n < 1 {
+				continue
+			} else if n > 1 {
+				log.Printf("{WARN} Scanln -> %d, %s\n", n, err)
+				continue
+			}
+			//
+			urls_chan <- url
+		}
+	}(urls_chan)
+	///
+	return urls_chan
+}
+
 ///// MAIN /////
 func main() {
 	// --
-	urls := [...]URL{
-		"http://golang.com",
-		"http://golang.com",
-		"http://google.com",
+	var match_re_src string
+	default_match_re_src := flag.String("", "Go", "pattern to match (re2)")
+	max_workers_num := flag.Int("k", 5, "maximum number of workers")
+
+	flag.Parse()
+	if flag.NArg() > 1 {
+		flag.Usage()
+		log.Fatal(flag.Args())
+	} else if match_re_src = flag.Arg(0); match_re_src == "" {
+		match_re_src = *default_match_re_src
 	}
-	match_re := regexp.MustCompile("Go")
+	/////
+	log.Println(match_re_src, *max_workers_num)
 
 	// --
-	total := 0
-	for _, url := range urls {
-		if m, ok := ReCountMatchesURL(match_re, url); ok {
-			total += m
-			PrintMatchCountForURL(url, &m)
-		} else {
-			PrintMatchCountForURL(url, nil)
-		}
-	}
+	match_re := regexp.MustCompile(match_re_src)
+
+	total := ReCountMatchesURLParallel(match_re,
+		StartUrlsChannel(os.Stdin),
+		*max_workers_num)
+	/*
+		total := 0
+		for url := range StartUrlsChannel(os.Stdin) {
+			if m, ok := ReCountMatchesURL(match_re, url); ok {
+				total += m
+				PrintMatchCountForURL(url, &m)
+			} else {
+				PrintMatchCountForURL(url, nil)
+			}
+		}*/
 	fmt.Printf("Total count: %d", total)
 }
