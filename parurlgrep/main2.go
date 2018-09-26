@@ -27,6 +27,36 @@ func ReCountMatchesURL(re *regexp.Regexp, in URL) (int, bool) {
 }
 
 ///////////
+// map-parallel??
+func ReCountMatchesURLParallel(re *regexp.Regexp, in <-chan URL,
+	max_jobs int /* FIXME: 'jobs' =/= 'workers' */) int {
+	// --
+	jobsem := make(chan struct{}, max_jobs)
+
+	// --
+	for url := range in {
+		jobsem <- struct{}{}
+		go func(url URL /* ??? jobsem, ??? out-chan */) {
+			defer func() { <-jobsem }()
+			// TODO: copy regular expr
+
+			if m, ok := ReCountMatchesURL(re, url); ok {
+				//total += m
+				PrintMatchCountForURL(url, &m)
+			} else {
+				PrintMatchCountForURL(url, nil)
+			}
+
+			/// TODO: cancelation
+			// ??? return-channel <- m
+		}(url)
+	}
+
+	// --
+	return 0 // !!! FIXME
+}
+
+///////////
 func PrintMatchCountForURL(url URL, mcnt *int) {
 	if mcnt == nil {
 		fmt.Printf("Count for %s: NO DATA\n", url)
