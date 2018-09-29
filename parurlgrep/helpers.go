@@ -27,7 +27,7 @@ type URLReader struct {
 	io.RuneReader
 }
 
-func URLGet(url URL) *URLReader {
+func NewURLReader(url URL) *URLReader {
 	r, err := http.Get(url)
 	if r == nil {
 		log.Printf("ERROR: http.Get(%s): %v", url, err)
