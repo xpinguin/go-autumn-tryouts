@@ -67,6 +67,30 @@ func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
 }
 
 ///////////
+type URL_ctrM = struct {
+	u    URL
+	ctrs <-chan int
+}
+
+// Re -> Stream URL -> Stream (URL, Maybe Stream Int) -> ()
+func ReURLStreamMatchCounter_(re *Re, us <-chan URL, ms chan<- URL_ctrM) {
+	go func() {
+		defer close(ms)
+		///
+		for u := range us {
+			ms <- URL_ctrM{u, MatchesCounter(ReURLMatchIter(re, u))}
+		}
+	}()
+}
+
+// Re -> Stream URL -> Stream (URL, Maybe Stream Int)
+func ReURLStreamMatchCounter(re *Re, us <-chan URL) chan<- URL_ctrM {
+	ms := make(chan URL_ctrM) /* MatcheRs */
+	ReURLStreamMatchCounter_(re, us, ms)
+	return ms
+}
+
+///////////
 // Stream rune -> Stream URL
 func UrlsIter_(r io.Reader, urls chan<- URL) {
 	go func() {
@@ -187,7 +211,7 @@ func main() {
 	log.Println(match_re_src, *max_workers_num)
 
 	// --
-	url_ms := make(chan URL_chanM) // :: Stream (URL, Maybe Stream ())
+	url_ms := make(chan URL_chanM, *max_workers_num) // :: Stream (URL, Maybe Stream ())
 	ReURLStreamMatchIter_(
 		regexp.MustCompile(match_re_src),
 		UrlsIter(os.Stdin),
