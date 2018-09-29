@@ -31,7 +31,7 @@ func ReStreamMatchIter(re *Re, in io.RuneReader) <-chan M {
 	return ms
 }
 
-// Re -> URL -> Stream ()
+// Re -> URL -> Maybe Stream ()
 func ReURLMatchIter(re *Re, u URL) <-chan M {
 	s := NewURLReader(u)
 	if s == nil {
@@ -47,7 +47,7 @@ type URL_chanM = struct {
 	ms <-chan M
 }
 
-// Re -> Stream URL -> Stream (URL, Stream ())
+// Re -> Stream URL -> Stream (URL, Maybe Stream ())
 func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
 	ms := make(chan URL_chanM) /* MatcheRs */
 	// --
@@ -61,7 +61,7 @@ func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
 	return ms
 }
 
-// Re -> Stream URL -> Stream (URL, Stream ()) -> ()
+// Re -> Stream URL -> Stream (URL, Maybe Stream ()) -> ()
 func ReURLStreamMatchIter_(re *Re, us <-chan URL, ms chan<- URL_chanM) {
 	go func() {
 		defer close(ms) // NB. auto-close
@@ -73,7 +73,7 @@ func ReURLStreamMatchIter_(re *Re, us <-chan URL, ms chan<- URL_chanM) {
 
 ///////////
 // Stream rune -> Stream URL
-func StartUrlsChannel(r io.Reader) <-chan URL {
+func UrlsIter(r io.Reader) <-chan URL {
 	urls_chan := make(chan URL)
 	///
 	go func(urls_chan chan<- URL) { // _ :: Chan URL -> IO ()
@@ -109,10 +109,33 @@ func MatchesCount(ms <-chan M) int {
 	return ctr
 }
 
-// Maybe Stream () -> Stream Maybe Int
-func StartMatchesCounter(ms <-chan M) <-chan *int {
-	ctr_out := make(chan *int)
+// Maybe Stream () -> Stream Int -> Bool
+func MatchesCounter_(ms <-chan M, ctr_out chan<- int) bool {
+	if ms == nil {
+		return false
+	}
 	// --
+	go func() {
+		defer close(ctr_out)
+		ctr_out <- MatchesCount(ms)
+	}()
+	return true
+}
+
+// Maybe Stream () -> Maybe Stream Int
+func MatchesCounter(ms <-chan M) <-chan int {
+	if ms == nil {
+		return nil
+	}
+	// --
+	if ctr_out := make(chan int); MatchesCounter_(ms, ctr_out) {
+		return ctr_out
+	}
+	return nil
+}
+
+// Maybe Stream () -> Stream Maybe Int -> ()
+func MatchesCounterIter_(ms <-chan M, ctr_out chan<- *int) {
 	go func() {
 		defer close(ctr_out)
 		if ms == nil {
@@ -122,7 +145,12 @@ func StartMatchesCounter(ms <-chan M) <-chan *int {
 		ctr := MatchesCount(ms)
 		ctr_out <- &ctr
 	}()
-	// --
+}
+
+// Maybe Stream () -> Stream Maybe Int
+func MatchesCounterIter(ms <-chan M) <-chan *int {
+	ctr_out := make(chan *int)
+	MatchesCounterIter_(ms, ctr_out)
 	return ctr_out
 }
 
@@ -159,11 +187,10 @@ func main() {
 	log.Println(match_re_src, *max_workers_num)
 
 	// --
-	// matchers :: Stream (URL, Stream ())
-	url_ms := make(chan URL_chanM) //, *max_workers_num)
+	url_ms := make(chan URL_chanM) // :: Stream (URL, Maybe Stream ())
 	ReURLStreamMatchIter_(
 		regexp.MustCompile(match_re_src),
-		StartUrlsChannel(os.Stdin),
+		UrlsIter(os.Stdin),
 		url_ms)
 
 	// --
@@ -190,6 +217,31 @@ func main() {
 		// --
 		switch rv := v.Interface().(type) {
 		///////
+		case URL_chanM:
+			if !copen {
+				for i, c := range chans {
+					if c == dcase {
+						chans[i] = nilcase
+						workers_num--
+					}
+				}
+				///
+				log.Println("Closed URL matchers channel `URL_chanM`")
+				url_ms = nil
+				break
+			}
+			///
+			ms := MatchesCounter(rv.ms)
+			//ms := MatchesCounterIter(rv.ms)
+			//ms := rv.ms
+			if ms == nil {
+				fmt.Printf("[URL_chanM] Count for %s: NO DATA\n", rv.u)
+				break
+			}
+			///
+			chans[ci] = NewSelectCaseRecv(ms)
+			urls_ctr[ci] = URL_ctrM{rv, 0}
+		///////
 		case *int:
 			if !copen {
 				if url_ms != nil {
@@ -206,46 +258,38 @@ func main() {
 				break
 			}
 			fmt.Printf("[*int] Count for %s: %d\n", urls_ctr[ci].u, *rv)
-			///
 			total += *rv
 		///////
-		/*		case M:
-				if !copen {
-					total += urls_ctr[ci].ms_ctr
-					fmt.Printf("Count for %s: %d\n", urls_ctr[ci].u, urls_ctr[ci].ms_ctr)
-					///
-					if url_ms != nil {
-						chans[ci] = dcase
-					} else {
-						chans[ci] = nilcase
-						workers_num--
-					}
-					break
-				}
-				urls_ctr[ci].ms_ctr++*/
-		///////
-		case URL_chanM:
+		case int:
 			if !copen {
-				for i, c := range chans {
-					if c == dcase {
-						chans[i] = nilcase
-						workers_num--
-					}
+				if url_ms != nil {
+					chans[ci] = dcase
+				} else {
+					chans[ci] = nilcase
+					workers_num--
 				}
-				///
-				log.Println("Closed URL matchers channel `URL_chanM`")
-				url_ms = nil
 				break
 			}
 			///
-			/*if rv.ms == nil {
-				fmt.Printf("[URL_chanM] Count for %s: NO DATA\n", rv.u)
+			fmt.Printf("[int] Count for %s: %d\n", urls_ctr[ci].u, rv)
+			total += rv
+			///////
+		case M:
+			if !copen {
+				total += urls_ctr[ci].ms_ctr
+				fmt.Printf("Count for %s: %d\n", urls_ctr[ci].u, urls_ctr[ci].ms_ctr)
+				///
+				if url_ms != nil {
+					chans[ci] = dcase
+				} else {
+					chans[ci] = nilcase
+					workers_num--
+				}
 				break
-			}*/
-			///
-			chans[ci] = NewSelectCaseRecv(StartMatchesCounter(rv.ms))
-			urls_ctr[ci] = URL_ctrM{rv, 0}
+			}
+			urls_ctr[ci].ms_ctr++
 		}
+
 	}
 
 	// --
