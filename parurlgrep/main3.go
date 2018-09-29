@@ -8,6 +8,7 @@ import (
 	"os"
 	meta "reflect"
 	"regexp"
+	"runtime"
 )
 
 type Re = regexp.Regexp
@@ -30,9 +31,8 @@ func ReStreamMatchIter(re *Re, in io.RuneReader) <-chan M {
 	return ms
 }
 
-////
 // Re -> URL -> Stream ()
-func ReURLMatchIter(re *Re, u URL) <-chan struct{} {
+func ReURLMatchIter(re *Re, u URL) <-chan M {
 	s := NewURLReader(u)
 	if s == nil {
 		return nil
@@ -47,7 +47,6 @@ type URL_chanM = struct {
 	ms <-chan M
 }
 
-////
 // Re -> Stream URL -> Stream (URL, Stream ())
 func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
 	ms := make(chan URL_chanM) /* MatcheRs */
@@ -62,7 +61,6 @@ func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
 	return ms
 }
 
-////
 // Re -> Stream URL -> Stream (URL, Stream ()) -> ()
 func ReURLStreamMatchIter_(re *Re, us <-chan URL, ms chan<- URL_chanM) {
 	go func() {
@@ -102,6 +100,33 @@ func StartUrlsChannel(r io.Reader) <-chan URL {
 }
 
 ///////////
+// Stream () -> Int
+func MatchesCount(ms <-chan M) int {
+	ctr := 0
+	for range ms {
+		ctr++
+	}
+	return ctr
+}
+
+// Maybe Stream () -> Stream Maybe Int
+func StartMatchesCounter(ms <-chan M) <-chan *int {
+	ctr_out := make(chan *int)
+	// --
+	go func() {
+		defer close(ctr_out)
+		if ms == nil {
+			ctr_out <- nil
+			return
+		}
+		ctr := MatchesCount(ms)
+		ctr_out <- &ctr
+	}()
+	// --
+	return ctr_out
+}
+
+///////////
 type SelectCase = meta.SelectCase
 
 ///
@@ -115,6 +140,9 @@ func NewSelectCaseRecv(c interface{}) SelectCase {
 
 ///// MAIN /////
 func main() {
+	// --
+	gomaxprocs := runtime.GOMAXPROCS(runtime.NumCPU())
+	log.Printf("[set] GOMAXPROCS = %d", gomaxprocs)
 	// --
 	var match_re_src string
 	default_match_re_src := flag.String("", "Go", "pattern to match (re2)")
@@ -162,11 +190,8 @@ func main() {
 		// --
 		switch rv := v.Interface().(type) {
 		///////
-		case M:
+		case *int:
 			if !copen {
-				total += urls_ctr[ci].ms_ctr
-				fmt.Printf("Count for %s: %d\n", urls_ctr[ci].u, urls_ctr[ci].ms_ctr)
-				///
 				if url_ms != nil {
 					chans[ci] = dcase
 				} else {
@@ -175,7 +200,29 @@ func main() {
 				}
 				break
 			}
-			urls_ctr[ci].ms_ctr++
+			///
+			if rv == nil {
+				fmt.Printf("[*int] Count for %s: NO DATA\n", urls_ctr[ci].u)
+				break
+			}
+			fmt.Printf("[*int] Count for %s: %d\n", urls_ctr[ci].u, *rv)
+			///
+			total += *rv
+		///////
+		/*		case M:
+				if !copen {
+					total += urls_ctr[ci].ms_ctr
+					fmt.Printf("Count for %s: %d\n", urls_ctr[ci].u, urls_ctr[ci].ms_ctr)
+					///
+					if url_ms != nil {
+						chans[ci] = dcase
+					} else {
+						chans[ci] = nilcase
+						workers_num--
+					}
+					break
+				}
+				urls_ctr[ci].ms_ctr++*/
 		///////
 		case URL_chanM:
 			if !copen {
@@ -191,12 +238,12 @@ func main() {
 				break
 			}
 			///
-			if rv.ms == nil {
-				fmt.Printf("Count for %s: NO DATA\n", rv.u)
+			/*if rv.ms == nil {
+				fmt.Printf("[URL_chanM] Count for %s: NO DATA\n", rv.u)
 				break
-			}
+			}*/
 			///
-			chans[ci] = NewSelectCaseRecv(rv.ms)
+			chans[ci] = NewSelectCaseRecv(StartMatchesCounter(rv.ms))
 			urls_ctr[ci] = URL_ctrM{rv, 0}
 		}
 	}
