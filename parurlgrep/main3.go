@@ -23,6 +23,7 @@ func ReStreamMatchIter(re *Re, in io.RuneReader) <-chan M {
 	// --
 	go func(ms chan<- M) {
 		defer close(ms)
+		///
 		for re.FindReaderIndex(in) != nil {
 			ms <- M{} // TODO: use non-empty struct (str or index)
 		}
@@ -47,42 +48,35 @@ type URL_chanM = struct {
 	ms <-chan M
 }
 
-// Re -> Stream URL -> Stream (URL, Maybe Stream ())
-func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
-	ms := make(chan URL_chanM) /* MatcheRs */
-	// --
-	go func() {
-		defer close(ms)
-		for u := range us {
-			ms <- URL_chanM{u, ReURLMatchIter(re, u)}
-		}
-	}()
-	// --
-	return ms
-}
-
 // Re -> Stream URL -> Stream (URL, Maybe Stream ()) -> ()
 func ReURLStreamMatchIter_(re *Re, us <-chan URL, ms chan<- URL_chanM) {
 	go func() {
-		defer close(ms) // NB. auto-close
+		defer close(ms)
+		///
 		for u := range us {
 			ms <- URL_chanM{u, ReURLMatchIter(re, u)}
 		}
 	}()
+}
+
+// Re -> Stream URL -> Stream (URL, Maybe Stream ())
+func ReURLStreamMatchIter(re *Re, us <-chan URL) <-chan URL_chanM {
+	ms := make(chan URL_chanM) /* MatcheRs */
+	ReURLStreamMatchIter_(re, us, ms)
+	return ms
 }
 
 ///////////
 // Stream rune -> Stream URL
-func UrlsIter(r io.Reader) <-chan URL {
-	urls_chan := make(chan URL)
-	///
-	go func(urls_chan chan<- URL) { // _ :: Chan URL -> IO ()
-		var url URL
+func UrlsIter_(r io.Reader, urls chan<- URL) {
+	go func() {
+		defer close(urls)
+		///
+		var u URL
 		for {
-			// read url
-			n, err := fmt.Fscanln(r, &url)
+			// -- read url
+			n, err := fmt.Fscanln(r, &u)
 			if err == io.EOF {
-				close(urls_chan)
 				return
 			}
 			if n < 1 {
@@ -91,11 +85,15 @@ func UrlsIter(r io.Reader) <-chan URL {
 				log.Printf("{WARN} Scanln -> %d, %s\n", n, err)
 				continue
 			}
-			//
-			urls_chan <- url
+			// --
+			urls <- u
 		}
-	}(urls_chan)
-	///
+	}()
+}
+
+func UrlsIter(r io.Reader) <-chan URL {
+	urls_chan := make(chan URL)
+	UrlsIter_(r, urls_chan)
 	return urls_chan
 }
 
@@ -117,6 +115,7 @@ func MatchesCounter_(ms <-chan M, ctr_out chan<- int) bool {
 	// --
 	go func() {
 		defer close(ctr_out)
+		///
 		ctr_out <- MatchesCount(ms)
 	}()
 	return true
@@ -138,6 +137,7 @@ func MatchesCounter(ms <-chan M) <-chan int {
 func MatchesCounterIter_(ms <-chan M, ctr_out chan<- *int) {
 	go func() {
 		defer close(ctr_out)
+		///
 		if ms == nil {
 			ctr_out <- nil
 			return
