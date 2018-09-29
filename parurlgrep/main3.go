@@ -91,7 +91,7 @@ func ReURLStreamMatchCounter(re *Re, us <-chan URL) chan<- URL_ctrM {
 }
 
 ///////////
-// Stream rune -> Stream URL
+// Stream rune -> Stream URL -> ()
 func UrlsIter_(r io.Reader, urls chan<- URL) {
 	go func() {
 		defer close(urls)
@@ -115,6 +115,7 @@ func UrlsIter_(r io.Reader, urls chan<- URL) {
 	}()
 }
 
+// Stream rune -> Stream URL
 func UrlsIter(r io.Reader) <-chan URL {
 	urls_chan := make(chan URL)
 	UrlsIter_(r, urls_chan)
