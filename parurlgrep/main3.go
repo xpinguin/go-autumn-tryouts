@@ -17,29 +17,52 @@ type Re = regexp.Regexp
 type M = struct{}
 
 ////
-// Re -> Stream rune -> Stream ()
-func ReStreamMatchIter(re *Re, in io.RuneReader) <-chan M {
-	ms := make(chan M) /* Matches */
-	// --
-	go func(ms chan<- M) {
+// Re -> Stream rune -> Stream () ->
+func ReStreamMatchIter_(re *Re, in io.RuneReader, ms chan<- M) {
+	go func() {
 		defer close(ms)
 		///
 		for re.FindReaderIndex(in) != nil {
 			ms <- M{} // TODO: use non-empty struct (str or index)
 		}
-	}(ms)
-	// --
+	}()
+}
+
+// Re -> Stream rune -> Stream ()
+func ReStreamMatchIter(re *Re, in io.RuneReader) <-chan M {
+	ms := make(chan M) /* Matches */
+	ReStreamMatchIter_(re, in, ms)
 	return ms
 }
 
 // Re -> URL -> Maybe Stream ()
 func ReURLMatchIter(re *Re, u URL) <-chan M {
-	s := NewURLReader(u)
+	s := NewURLReader(u) // TODO: upgrade `NewURLReader` to the same approach
 	if s == nil {
 		return nil
 	}
 	// --
 	return ReStreamMatchIter(re, s)
+}
+
+// Re -> URL -> Stream Maybe Stream ()
+func ReURLMatchIter2(re *Re, u URL) <-chan (<-chan M) {
+	mss := make(chan (<-chan M))
+	// --
+	go func() {
+		ms := make(chan M)
+		mss <- ms
+		///
+		s := NewURLReader(u)
+		if s == nil {
+			close(ms)
+			return // close matchers stream; FIXME: use the same pattern
+		}
+		///
+		ReStreamMatchIter_(re, s, ms)
+	}()
+	// --
+	return mss
 }
 
 ///////////
