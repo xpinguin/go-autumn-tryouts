@@ -84,10 +84,44 @@ func ReURLStreamMatchCounter_(re *Re, us <-chan URL, ms chan<- URL_ctrM) {
 }
 
 // Re -> Stream URL -> Stream (URL, Maybe Stream Int)
-func ReURLStreamMatchCounter(re *Re, us <-chan URL) chan<- URL_ctrM {
+func ReURLStreamMatchCounter(re *Re, us <-chan URL) <-chan URL_ctrM {
 	ms := make(chan URL_ctrM) /* MatcheRs */
 	ReURLStreamMatchCounter_(re, us, ms)
 	return ms
+}
+
+/////////// (higher-order channels?)
+// Re -> Stream URL -> Stream Stream (URL, Maybe Stream Int)
+func ReURLStreamMatchCounter2(re *Re, us <-chan URL) <-chan (<-chan URL_ctrM) {
+	mss := make(chan (<-chan URL_ctrM))
+	go func() {
+		defer close(mss)
+		///
+		ms := make(chan URL_ctrM) /* MatcheRs */
+		mss <- ms
+		ReURLStreamMatchCounter_(re, us, ms)
+	}()
+	return mss
+}
+
+// Re -> Stream Stream URL -> Stream Stream (URL, Maybe Stream Int) -> ()
+func ReURLStreamMatchCounter3_(re *Re, uss <-chan (<-chan URL), mss chan<- (<-chan URL_ctrM)) {
+	go func() {
+		defer close(mss)
+		///
+		for us := range uss {
+			ms := make(chan URL_ctrM) /* MatcheRs */
+			mss <- ms
+			ReURLStreamMatchCounter_(re, us, ms)
+		}
+	}()
+}
+
+// Re -> Stream Stream URL -> Stream Stream (URL, Maybe Stream Int)
+func ReURLStreamMatchCounter3(re *Re, uss <-chan (<-chan URL)) <-chan (<-chan URL_ctrM) {
+	mss := make(chan (<-chan URL_ctrM))
+	ReURLStreamMatchCounter3_(re, uss, mss)
+	return mss
 }
 
 ///////////
