@@ -87,11 +87,11 @@ func main() {
 				for _, n := range nodes {
 					nbox, err := dom.GetBoxModel().WithNodeID(n.NodeID).Do(ctxt, h)
 					if err != nil {
-						log.Printf("{ERR} <%s>: %v", n.NodeName, err)
+						//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
 						continue
 					}
 					// --
-					log.Printf("<%s>: %v", n.NodeName, nbox.Content)
+					fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
 				}
 				return nil
 			},
@@ -101,6 +101,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("{ERR} Run: err = %v", err)
 	}
+	fmt.Printf("^^^^^ URL: %s ^^^^^", page_url)
 
 	/*log.Printf("URL: %s ;; BOXMODEL: %p", page_url, boxmodel)
 	//log.Printf("BOXMODEL OUTER SIZE: %d", len(boxmodel))
