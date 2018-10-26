@@ -18,6 +18,37 @@ type (
 	//Target = chroclient.Target
 )
 
+// ! TODO
+// TargetBoxModel :: CDP -> Context -> Target/int -> (URL, []dom.BoxModel, error)
+
+//
+func DumpTargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, err error) {
+	err = c.Run(ctx, chro.Tasks{
+		c.SetTarget(targetIndex),
+		chro.Evaluate("document.location.toString()", &pageURL),
+		chro.QueryAfter(
+			"*",
+			func(ctxt Context, h *TargetHandler, nodes ...*DOMNode) error {
+				if len(nodes) < 1 {
+					return fmt.Errorf("selector did not return any nodes")
+				}
+				for _, n := range nodes {
+					nbox, err := dom.GetBoxModel().WithNodeID(n.NodeID).Do(ctxt, h)
+					if err != nil {
+						//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
+						continue
+					}
+					// --
+					fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
+				}
+				return nil
+			},
+			chro.BySearch,
+		),
+	})
+	return
+}
+
 func main() {
 	//
 	//ctx, ctx_cancel := context.WithCancel(context.Background())
@@ -69,33 +100,9 @@ func main() {
 	}*/
 
 	// box model (for the current target)
-	var page_url string
-
-	err = c.Run(ctx, chro.Tasks{
-		c.SetTarget(0),
-		chro.Evaluate("document.location.toString()", &page_url),
-		chro.QueryAfter(
-			"*",
-			func(ctxt Context, h *TargetHandler, nodes ...*DOMNode) error {
-				if len(nodes) < 1 {
-					return fmt.Errorf("selector did not return any nodes")
-				}
-				for _, n := range nodes {
-					nbox, err := dom.GetBoxModel().WithNodeID(n.NodeID).Do(ctxt, h)
-					if err != nil {
-						//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
-						continue
-					}
-					// --
-					fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
-				}
-				return nil
-			},
-			chro.BySearch,
-		),
-	})
+	url, err := DumpTargetBoxModel(c, ctx, 0)
 	if err != nil {
 		log.Fatalf("{ERR} Run: err = %v", err)
 	}
-	fmt.Printf("^^^^^ URL: %s ^^^^^", page_url)
+	fmt.Printf("^^^^^ URL: %s ^^^^^", url)
 }
