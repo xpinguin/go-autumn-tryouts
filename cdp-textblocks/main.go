@@ -18,11 +18,14 @@ type (
 	//Target = chroclient.Target
 )
 
-// ! TODO
-// TargetBoxModel :: CDP -> Context -> Target/int -> (URL, []dom.BoxModel, error)
+type DOMNodeBoxModel struct {
+	n   *DOMNode
+	box *dom.BoxModel
+}
 
-//
-func DumpTargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, err error) {
+// ! FIXME
+// TargetBoxModel :: CDP -> Context -> Target/int -> (URL, []DOMNodeBoxModel, error)
+func TargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, boxes []DOMNodeBoxModel, err error) {
 	err = c.Run(ctx, chro.Tasks{
 		c.SetTarget(targetIndex),
 		chro.Evaluate("document.location.toString()", &pageURL),
@@ -38,14 +41,28 @@ func DumpTargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL stri
 						//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
 						continue
 					}
+					boxes = append(boxes, DOMNodeBoxModel{n, nbox})
 					// --
-					fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
+					//fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
 				}
 				return nil
 			},
 			chro.BySearch,
 		),
 	})
+	return
+}
+
+//
+func DumpTargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, err error) {
+	pageURL, boxes, err := TargetBoxModel(c, ctx, targetIndex)
+	if err != nil {
+		return
+	}
+	// --
+	for _, nbox := range boxes {
+		fmt.Printf("[%v] <%s>: %v\n", nbox.n.NodeID, nbox.n.NodeName, nbox.box.Content)
+	}
 	return
 }
 
@@ -104,5 +121,5 @@ func main() {
 	if err != nil {
 		log.Fatalf("{ERR} Run: err = %v", err)
 	}
-	fmt.Printf("^^^^^ URL: %s ^^^^^", url)
+	fmt.Printf("^^^^^ URL: %s ^^^^^\n", url)
 }
