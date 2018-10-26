@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
@@ -15,7 +16,10 @@ type (
 	Context       = context.Context
 	DOMNode       = cdp.Node
 	TargetHandler = chro.TargetHandler
-	//Target = chroclient.Target
+	Target        = chroclient.Target
+
+	CDP       = chro.CDP
+	CDPClient = chroclient.Client
 )
 
 type DOMNodeBoxModel struct {
@@ -24,7 +28,7 @@ type DOMNodeBoxModel struct {
 }
 
 // TargetBoxModels :: CDP -> Context -> Target/int -> Stream DOMNodeBoxModel ->(URL, error)
-func TargetBoxModels(c *chro.CDP, ctx Context, targetIndex int, boxes chan<- DOMNodeBoxModel) (pageURL string, err error) {
+func TargetBoxModels(c *CDP, ctx Context, targetIndex int, boxes chan<- DOMNodeBoxModel) (pageURL string, err error) {
 	err = c.Run(ctx, chro.Tasks{
 		c.SetTarget(targetIndex),
 		chro.Evaluate("document.location.toString()", &pageURL),
@@ -52,16 +56,16 @@ func TargetBoxModels(c *chro.CDP, ctx Context, targetIndex int, boxes chan<- DOM
 	return
 }
 
-// DumpTargetBoxModels :: CDP -> Context -> Target/int ->(URL, error) -> ()
-func DumpTargetBoxModels(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, err error) {
+// DumpTargetBoxModels :: CDP -> Context -> Target/int ->(URL, error)   ????: -> ()
+func DumpTargetBoxModels(c *CDP, ctx Context, targetIndex int) (pageURL string, err error) {
 	boxes := make(chan DOMNodeBoxModel)
 	// --
 	go func() {
 		pageURL, err = TargetBoxModels(c, ctx, targetIndex, boxes)
+		////
 		if err != nil {
 			log.Printf("{ERR} TargetBoxModel(..., targetIndex = %d, ...): err = %v", err)
 		}
-		////
 		close(boxes)
 	}()
 	// --
@@ -69,6 +73,35 @@ func DumpTargetBoxModels(c *chro.CDP, ctx Context, targetIndex int) (pageURL str
 		fmt.Printf("[%v] <%s>: %v\n", nbox.n.NodeID, nbox.n.NodeName, nbox.box.Content)
 	}
 	return
+}
+
+// PageTargets :: CDPClient -> Context -> Stream Target -> error
+func PageTargets(cl *CDPClient, ctx Context, pages chan<- Target) (err error) {
+	ts, err := cl.ListPageTargets(ctx)
+	if err != nil {
+		return
+	}
+	// --
+	for _, t := range ts {
+		pages <- t
+	}
+	return
+}
+
+// IterPageTargets :: CDPClient -> Context -> Stream Target
+func IterPageTargets(cl *CDPClient, ctx Context) <-chan Target {
+	pages := make(chan Target)
+	// --
+	go func() {
+		err := PageTargets(cl, ctx, pages)
+		////
+		if err != nil {
+			log.Printf("{ERR} PageTargets(...): err = %v", err)
+		}
+		close(pages)
+	}()
+	// --
+	return pages
 }
 
 func main() {
@@ -86,40 +119,31 @@ func main() {
 	}
 
 	// list open tabs (page-targets)
-	// --
-	/*ListPageTargets := func(ctx Context) []chroclient.Target {
-		ts, _ := cclient.ListPageTargets(ctx)
-		return ts
+	/*ts, err := cclient.ListPageTargets(ctx)
+	if err != nil {
+		log.Printf("{ERR} ListPageTargets(...): err = %v", err)
 	}*/
-
-	// -- revert back current tab
-	/*c.Lock()
-	active_handler := c.cur
-	c.Unlock()
-	var active_page chroclient.Target
-
-	for i, page := range ListPageTargets(ctx) {
-		if active_handler == c.GetHandlerByIndex(i) {
-			active_page = page
-			break
+	//for pt := range IterPageTargets(cclient, ctx) {
+	/*for _, pt := range ts {
+		//cclient.ActivateTarget(ctx, pt)
+		c.AddTarget(ctx, pt)
+	}*/
+	<-time.After(10 * time.Second) // FIXME
+	for i, ptID := range c.ListTargets() {
+		// --
+		var url string
+		err := c.Run(ctx, chro.Tasks{
+			//c.SetTargetByID(ptID),
+			c.SetTarget(i),
+			chro.Evaluate("document.location.toString()", &url),
+		})
+		if err != nil {
+			log.Printf("[%d]/%v CDP.Run(...): err = %v", i, ptID, err)
+		} else {
+			log.Printf("[%d]/%v %s", i, ptID, url)
 		}
 	}
-	defer c.SetHandlerByID(active_page.GetID())*/
-
-	// -- iterate through all
-	/*for i, page := range ListPageTargets(ctx) {
-		if err := _c_client.ActivateTarget(ctx, page); err != nil {
-			log.Fatalf("ActivateTarget(%v): err = %v", page, err)
-		}
-		// --
-		var page_url string
-		c.Run(ctx, chro.Tasks{
-			c.SetTarget(i),
-			chro.Evaluate("document.location.toString()", &page_url),
-		})
-		log.Printf("[%d] %s {target-id:%v}", i, page_url, page.GetID())
-
-	}*/
+	return
 
 	// box model (for the current target)
 	url, err := DumpTargetBoxModels(c, ctx, 0)
