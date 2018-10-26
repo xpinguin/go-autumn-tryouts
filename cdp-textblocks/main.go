@@ -23,9 +23,8 @@ type DOMNodeBoxModel struct {
 	box *dom.BoxModel
 }
 
-// ! FIXME
-// TargetBoxModel :: CDP -> Context -> Target/int -> (URL, []DOMNodeBoxModel, error)
-func TargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, boxes []DOMNodeBoxModel, err error) {
+// TargetBoxModels :: CDP -> Context -> Target/int -> Stream DOMNodeBoxModel ->(URL, error)
+func TargetBoxModels(c *chro.CDP, ctx Context, targetIndex int, boxes chan<- DOMNodeBoxModel) (pageURL string, err error) {
 	err = c.Run(ctx, chro.Tasks{
 		c.SetTarget(targetIndex),
 		chro.Evaluate("document.location.toString()", &pageURL),
@@ -41,7 +40,7 @@ func TargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, 
 						//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
 						continue
 					}
-					boxes = append(boxes, DOMNodeBoxModel{n, nbox})
+					boxes <- DOMNodeBoxModel{n, nbox}
 					// --
 					//fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
 				}
@@ -53,14 +52,20 @@ func TargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, 
 	return
 }
 
-//
-func DumpTargetBoxModel(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, err error) {
-	pageURL, boxes, err := TargetBoxModel(c, ctx, targetIndex)
-	if err != nil {
-		return
-	}
+// DumpTargetBoxModels :: CDP -> Context -> Target/int ->(URL, error) -> ()
+func DumpTargetBoxModels(c *chro.CDP, ctx Context, targetIndex int) (pageURL string, err error) {
+	boxes := make(chan DOMNodeBoxModel)
 	// --
-	for _, nbox := range boxes {
+	go func() {
+		pageURL, err = TargetBoxModels(c, ctx, targetIndex, boxes)
+		if err != nil {
+			log.Printf("{ERR} TargetBoxModel(..., targetIndex = %d, ...): err = %v", err)
+		}
+		////
+		close(boxes)
+	}()
+	// --
+	for nbox := range boxes {
 		fmt.Printf("[%v] <%s>: %v\n", nbox.n.NodeID, nbox.n.NodeName, nbox.box.Content)
 	}
 	return
@@ -117,7 +122,7 @@ func main() {
 	}*/
 
 	// box model (for the current target)
-	url, err := DumpTargetBoxModel(c, ctx, 0)
+	url, err := DumpTargetBoxModels(c, ctx, 0)
 	if err != nil {
 		log.Fatalf("{ERR} Run: err = %v", err)
 	}
