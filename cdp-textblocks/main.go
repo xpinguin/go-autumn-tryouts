@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
@@ -20,11 +19,19 @@ type (
 
 	CDP       = chro.CDP
 	CDPClient = chroclient.Client
+
+	DOMNodeID = cdp.NodeID
+	Rect      = dom.Quad
 )
 
 type DOMNodeBoxModel struct {
 	n   *DOMNode
 	box *dom.BoxModel
+}
+
+type Block struct {
+	nid DOMNodeID
+	Rect
 }
 
 // TargetBoxModels :: CDP -> Context -> Target/int -> Stream DOMNodeBoxModel ->(URL, error)
@@ -75,33 +82,70 @@ func DumpTargetBoxModels(c *CDP, ctx Context, targetIndex int) (pageURL string, 
 	return
 }
 
-// PageTargets :: CDPClient -> Context -> Stream Target -> error
-func PageTargets(cl *CDPClient, ctx Context, pages chan<- Target) (err error) {
-	ts, err := cl.ListPageTargets(ctx)
-	if err != nil {
-		return
+// :: DOMNode -> Rect
+func DOMNodeRect(nbox DOMNodeBoxModel) (Rect, bool) {
+	if nbox.box == nil {
+		return nil, false
 	}
-	// --
-	for _, t := range ts {
-		pages <- t
-	}
-	return
+	return nbox.box.Content, true
 }
 
-// IterPageTargets :: CDPClient -> Context -> Stream Target
-func IterPageTargets(cl *CDPClient, ctx Context) <-chan Target {
-	pages := make(chan Target)
-	// --
-	go func() {
-		err := PageTargets(cl, ctx, pages)
-		////
-		if err != nil {
-			log.Printf("{ERR} PageTargets(...): err = %v", err)
+// :: Rect -> Rect -> bool
+func RectWithinRect(inner Rect, outer Rect) bool {
+	if (inner[0] >= outer[0]) && (inner[1] >= outer[1]) &&
+		(inner[2] <= outer[2]) && (inner[3] <= outer[3]) {
+		return true
+	}
+	return false
+}
+
+//
+type RectTreeNode struct {
+	r  Rect
+	cn []*RectTreeNode
+}
+
+func (rtn RectTreeNode) Empty() bool {
+	return rtn.r == nil
+}
+
+func (rtn RectTreeNode) Within(outer *RectTreeNode) bool {
+	return RectWithinRect(rtn.r, outer.r)
+}
+
+// BoxModelsBlocks :: Stream DOMNodeBoxModel -> Stream Block -> ()
+func BoxModelsBlocks(boxes <-chan DOMNodeBoxModel, blocks chan<- Block) {
+	nrects := make(map[DOMNodeID]*RectTreeNode, 2000)
+
+	for nbox := range boxes {
+		r, ok := DOMNodeRect(nbox)
+		if !ok {
+			continue
 		}
-		close(pages)
-	}()
-	// --
-	return pages
+		/// FIXME
+		nid := nbox.n.NodeID
+		rtn := &RectTreeNode{r, nil}
+		for _, rtn0 := range nrects {
+			if rtn0.Within(rtn) {
+				rtn.cn = append(rtn.cn, rtn0)
+			} else if rtn.Within(rtn0) {
+				rtn0.cn = append(rtn0.cn, rtn)
+			}
+			nrects[nid] = rtn
+		}
+
+	}
+
+	/*// FIXME: O(n*n) -> O(n*log(n))
+	//nrects := make(map[DOMNodeID]Rect, 2000)
+	for nid0, r0 := range nrects {
+		for nid1, r1 := range nrects {
+			if nid1 == nid0 {
+				continue
+			}
+			////
+		}
+	}*/
 }
 
 func main() {
@@ -117,33 +161,6 @@ func main() {
 	} else if err != nil {
 		log.Printf("c = %v; err = %v", c, err)
 	}
-
-	// list open tabs (page-targets)
-	/*ts, err := cclient.ListPageTargets(ctx)
-	if err != nil {
-		log.Printf("{ERR} ListPageTargets(...): err = %v", err)
-	}*/
-	//for pt := range IterPageTargets(cclient, ctx) {
-	/*for _, pt := range ts {
-		//cclient.ActivateTarget(ctx, pt)
-		c.AddTarget(ctx, pt)
-	}*/
-	<-time.After(10 * time.Second) // FIXME
-	for i, ptID := range c.ListTargets() {
-		// --
-		var url string
-		err := c.Run(ctx, chro.Tasks{
-			//c.SetTargetByID(ptID),
-			c.SetTarget(i),
-			chro.Evaluate("document.location.toString()", &url),
-		})
-		if err != nil {
-			log.Printf("[%d]/%v CDP.Run(...): err = %v", i, ptID, err)
-		} else {
-			log.Printf("[%d]/%v %s", i, ptID, url)
-		}
-	}
-	return
 
 	// box model (for the current target)
 	url, err := DumpTargetBoxModels(c, ctx, 0)
