@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/mndrix/golog"
+	"github.com/mndrix/golog/term"
 )
 
 ////
@@ -111,10 +113,28 @@ func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
 		//log.Println(nbox, nrect, ok)
 	}
 
+	// --
+	var nvterm string
+	if nv := nbox.text; len(nv) > 0 && len(nv) < 200 {
+		/// ! FIXME: Golog's TermReader requires `s` to be less than 1000 symbols
+		/// TODO: implement as TermReader, rather than io.Reader
+		///
+		/// TODO: use ForeignPredicate for the node value: `node_value`/2
+		///
+		nvcodes := term.NewCodeListFromDoubleQuotedString(
+			strings.Replace(`"`+nv+`"`, "\n", "\\n", -1))
+		nvterm = fmt.Sprintf(`node(%d, value(%s)).`+"\n", nbox.n.NodeID, nvcodes.String())
+	}
+
+	// --
 	nboxterm := fmt.Sprintf("node(%d, rect(%.1f, %.1f, %.1f, %.1f)).\n", nbox.n.NodeID,
 		nrect[0], nrect[1], nrect[2], nrect[3])
-	copy(s, nboxterm)
-	return len(nboxterm), nil
+
+	// --
+	nterms := nboxterm + nvterm
+	fmt.Print(nterms) /// temporary!
+	copy(s, nterms)
+	return len(nterms), nil
 }
 
 //// TEST
@@ -135,8 +155,8 @@ func TestTextBlock(ctx Context, c *CDP, cclient *CDPClient) {
 	}()
 
 	pl = pl.Consult(DOMNodeRectReader{boxes})
-	fmt.Println(pl.ProveAll("node(A, rect(0.0, T, W, H))."))
+	log.Println(pl.ProveAll("node(Id, rect(0.0, T, W, H))."))
 
-	fmt.Printf("^^^^^ URL: %s ^^^^^\n", pageURL)
+	log.Printf("^^^^^ URL: %s ^^^^^\n", pageURL)
 	//fmt.Println(pl.ProveAll("listing."))
 }

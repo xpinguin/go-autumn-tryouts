@@ -24,10 +24,26 @@ type (
 	Rect      = dom.Quad
 )
 
+const (
+	// NB. from `chromedp/js.go`
+	// textJS is a javascript snippet that returns the concatenated textContent
+	// of all visible (ie, offsetParent !== null) children.
+	textJS = `(function(a) {
+		var s = '';
+		for (var i = 0; i < a.length; i++) {
+			if (a[i].offsetParent !== null) {
+				s += a[i].textContent;
+			}
+		}
+		return s;
+	})($x('%s/node()'))`
+)
+
 ////
 type DOMNodeBoxModel struct {
-	n   *DOMNode
-	box *dom.BoxModel
+	n    *DOMNode
+	box  *dom.BoxModel
+	text string
 }
 
 // TargetBoxModels_ :: CDP -> Context -> Target/int -> Stream DOMNodeBoxModel ->(URL, error)
@@ -42,14 +58,18 @@ func TargetBoxModels_(c *CDP, ctx Context, targetIndex int, boxes chan<- DOMNode
 					return fmt.Errorf("selector did not return any nodes")
 				}
 				for _, n := range nodes {
+					// -- box model
 					nbox, err := dom.GetBoxModel().WithNodeID(n.NodeID).Do(ctxt, h)
 					if err != nil {
 						//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
 						continue
 					}
-					boxes <- DOMNodeBoxModel{n, nbox}
+					// -- text content
+					var ntext string
+					chro.EvaluateAsDevTools(fmt.Sprintf(textJS, n.FullXPath()),
+						&ntext).Do(ctxt, h)
 					// --
-					//fmt.Printf("<%s>: %v\n", n.NodeName, nbox.Content)
+					boxes <- DOMNodeBoxModel{n, nbox, ntext}
 				}
 				return nil
 			},
