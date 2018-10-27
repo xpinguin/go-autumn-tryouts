@@ -1,5 +1,13 @@
 package main
 
+import (
+	"fmt"
+	"io"
+	"log"
+
+	"github.com/mndrix/golog"
+)
+
 ////
 //type Rect = []float64
 
@@ -73,4 +81,62 @@ func BoxModelsBlocks(boxes <-chan DOMNodeBoxModel, blocks chan<- Block) {
 			////
 		}
 	}*/
+}
+
+////
+type DOMNodeRectReader struct {
+	nboxes <-chan DOMNodeBoxModel
+}
+
+func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
+	//defer fmt.Println(s)
+	//defer fmt.Printf("%s", s)
+
+	if rr.nboxes == nil {
+		log.Fatalln("{FATAL} !rr.nboxes")
+	}
+
+	var nbox DOMNodeBoxModel
+	var nrect Rect
+	var ok bool
+
+	for !ok || nrect == nil {
+		nbox, ok = <-rr.nboxes
+		//log.Println(nbox, nrect, ok)
+		if !ok {
+			return 0, io.EOF
+		}
+		// --
+		nrect, ok = DOMNodeRect(nbox)
+		//log.Println(nbox, nrect, ok)
+	}
+
+	nboxterm := fmt.Sprintf("node(%d, rect(%.1f, %.1f, %.1f, %.1f)).\n", nbox.n.NodeID,
+		nrect[0], nrect[1], nrect[2], nrect[3])
+	copy(s, nboxterm)
+	return len(nboxterm), nil
+}
+
+//// TEST
+func TestTextBlock(ctx Context, c *CDP, cclient *CDPClient) {
+	pl := golog.NewMachine()
+
+	var pageURL string
+	var err error
+	boxes := make(chan DOMNodeBoxModel)
+
+	go func() {
+		defer close(boxes)
+		////
+		pageURL, err = TargetBoxModels_(c, ctx, 0, boxes)
+		if err != nil {
+			log.Printf("{ERR} TargetBoxModel(...): err = %v", err)
+		}
+	}()
+
+	pl = pl.Consult(DOMNodeRectReader{boxes})
+	fmt.Println(pl.ProveAll("node(A, rect(0.0, T, W, H))."))
+
+	fmt.Printf("^^^^^ URL: %s ^^^^^\n", pageURL)
+	//fmt.Println(pl.ProveAll("listing."))
 }

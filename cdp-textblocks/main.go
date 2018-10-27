@@ -30,8 +30,8 @@ type DOMNodeBoxModel struct {
 	box *dom.BoxModel
 }
 
-// TargetBoxModels :: CDP -> Context -> Target/int -> Stream DOMNodeBoxModel ->(URL, error)
-func TargetBoxModels(c *CDP, ctx Context, targetIndex int, boxes chan<- DOMNodeBoxModel) (pageURL string, err error) {
+// TargetBoxModels_ :: CDP -> Context -> Target/int -> Stream DOMNodeBoxModel ->(URL, error)
+func TargetBoxModels_(c *CDP, ctx Context, targetIndex int, boxes chan<- DOMNodeBoxModel) (pageURL string, err error) {
 	err = c.Run(ctx, chro.Tasks{
 		c.SetTarget(targetIndex),
 		chro.Evaluate("document.location.toString()", &pageURL),
@@ -59,17 +59,34 @@ func TargetBoxModels(c *CDP, ctx Context, targetIndex int, boxes chan<- DOMNodeB
 	return
 }
 
+// TargetBoxModels :: CDP -> Context -> Target/int -> (Stream DOMNodeBoxModel, URL, error)
+func TargetBoxModels(c *CDP, ctx Context, targetIndex int) (boxes <-chan DOMNodeBoxModel, pageURL string, err error) {
+	boxes_ := make(chan DOMNodeBoxModel)
+	boxes = boxes_
+	// --
+	go func() {
+		defer close(boxes_)
+		////
+		pageURL, err = TargetBoxModels_(c, ctx, targetIndex, boxes_)
+		if err != nil {
+			log.Printf("{ERR} TargetBoxModel(..., targetIndex = %d, ...): err = %v", targetIndex, err)
+		}
+	}()
+	// --
+	return // FIXME: `pageURL` and `err` won't work properly
+}
+
 // DumpTargetBoxModels :: CDP -> Context -> Target/int ->(URL, error)   ????: -> ()
 func DumpTargetBoxModels(c *CDP, ctx Context, targetIndex int) (pageURL string, err error) {
 	boxes := make(chan DOMNodeBoxModel)
 	// --
 	go func() {
-		pageURL, err = TargetBoxModels(c, ctx, targetIndex, boxes)
+		defer close(boxes)
 		////
+		pageURL, err = TargetBoxModels_(c, ctx, targetIndex, boxes)
 		if err != nil {
-			log.Printf("{ERR} TargetBoxModel(..., targetIndex = %d, ...): err = %v", err)
+			log.Printf("{ERR} TargetBoxModel(..., targetIndex = %d, ...): err = %v", targetIndex, err)
 		}
-		close(boxes)
 	}()
 	// --
 	for nbox := range boxes {
@@ -92,9 +109,10 @@ func main() {
 	}
 
 	// box model (for the current target)
-	url, err := DumpTargetBoxModels(c, ctx, 0)
+	TestTextBlock(ctx, c, cclient)
+	/*url, err := DumpTargetBoxModels(c, ctx, 0)
 	if err != nil {
 		log.Fatalf("{ERR} Run: err = %v", err)
 	}
-	fmt.Printf("^^^^^ URL: %s ^^^^^\n", url)
+	fmt.Printf("^^^^^ URL: %s ^^^^^\n", url)*/
 }
