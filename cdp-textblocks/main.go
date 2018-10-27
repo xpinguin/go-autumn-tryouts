@@ -21,7 +21,9 @@ type (
 	CDPClient = chroclient.Client
 
 	DOMNodeID = cdp.NodeID
-	Rect      = dom.Quad
+
+	// FIXME: dom.Quad <=> set of corner vertices ~[4]{x, y}; !!!!  IT IS NOT A Rect!
+	Rect = dom.Quad
 )
 
 const (
