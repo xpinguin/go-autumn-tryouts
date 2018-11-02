@@ -69,6 +69,7 @@ func RunPrologCLI(m golog.Machine, in_ interface{ io.Reader }, out interface{ io
 				return
 			}
 			////
+			var rlines string
 			for i, b := range bindings {
 				lines := make([]string, 0)
 				goalvars.ForEach(func(name string, variable interface{}) {
@@ -78,13 +79,16 @@ func RunPrologCLI(m golog.Machine, in_ interface{ io.Reader }, out interface{ io
 					lines = append(lines, line)
 				})
 
+				var finsuff string
 				if i == len(bindings)-1 {
-					lines[len(lines)-1] += "\t."
+					finsuff = "."
 				} else {
-					lines[len(lines)-1] += "\t;"
+					finsuff = ";"
 				}
-				r = strings.Join(lines, "\r\n")
+
+				rlines += strings.Join(lines, "\r\n") + "\t" + finsuff + "\r\n"
 			}
+			r = rlines
 			return
 		}()
 		// --
