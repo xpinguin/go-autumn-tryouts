@@ -11,6 +11,7 @@ import (
 
 	"github.com/mndrix/golog"
 	gologrdr "github.com/mndrix/golog/read"
+	gologterm "github.com/mndrix/golog/term"
 )
 
 func fprintf(f interface{ io.Writer }, s string, opts ...interface{}) {
@@ -24,7 +25,7 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 	for inClosed := false; !inClosed; {
 		fmt.Fprintf(out, "?- ")
 		// --
-		rs, err := func() (r interface{}, err error) {
+		ans, err := func() (r interface{}, err error) {
 			// read logical line
 			var query, s string
 			for {
@@ -40,7 +41,6 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 
 				query += strings.TrimSpace(s)
 				if len(query) == 0 || (len(query) > 0 && query[len(query)-1] == '.') {
-					fprintf(out, "<<< [0] '%s'", query)
 					break
 				}
 			}
@@ -58,14 +58,43 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 				return
 			}
 
-			fprintf(out, "<<< [1] '%v'", goal)
-			r = m.ProveAll(goal)
+			// TODO: return triplet (goal, goal-variables, answer-bindings)
+			//		 for the further processing outside of this routine
+			bindings := m.ProveAll(goal)
+			if len(bindings) == 0 {
+				r = "no."
+				return
+			}
+			////
+			goalvars := gologterm.Variables(goal)
+			if goalvars.Size() == 0 {
+				r = "yes."
+				return
+			}
+			////
+			for i, b := range bindings {
+				lines := make([]string, 0)
+				goalvars.ForEach(func(name string, variable interface{}) {
+					v := variable.(*gologterm.Variable)
+					val := b.Resolve_(v)
+					line := fmt.Sprintf("%s = %s", name, val)
+					lines = append(lines, line)
+				})
+
+				if i == len(bindings)-1 {
+					lines[len(lines)-1] += "\t."
+				} else {
+					lines[len(lines)-1] += "\t;"
+				}
+				r = strings.Join(lines, "\r\n")
+			}
 			return
 		}()
 		// --
-		if err == nil {
-			fprintf(out, "[RESULT] '%v'", rs)
+		if err != nil {
+			continue // TODO: indicate somewhere
 		}
+		fprintf(out, "%v", ans)
 	}
 }
 
