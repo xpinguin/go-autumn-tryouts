@@ -1,4 +1,4 @@
-// golog-cli-server
+// golog-server
 package main
 
 import (
@@ -17,10 +17,8 @@ func fprintf(f interface{ io.Writer }, s string, opts ...interface{}) {
 	fmt.Fprintf(f, s+"\r\n", opts...)
 }
 
-func RunPrologCLI(in interface{ io.Reader }, out interface{ io.Writer }) {
-	in_ := bufio.NewReader(in)
-	//out := bufio.NewWriter(out)
-
+func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
+	in := bufio.NewReader(in_)
 	m := golog.NewInteractiveMachine()
 
 	for {
@@ -28,7 +26,7 @@ func RunPrologCLI(in interface{ io.Reader }, out interface{ io.Writer }) {
 		// --
 		var query string
 		for {
-			s, err := in_.ReadString('\n')
+			s, err := in.ReadString('\n')
 			if err != nil {
 				log.Printf("{ERR} ReadString: %v", err)
 				break
