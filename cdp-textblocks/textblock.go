@@ -5,10 +5,9 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
-
+	//"strings"
 	//"github.com/mndrix/golog"
-	"github.com/mndrix/golog/term"
+	//"github.com/mndrix/golog/term"
 )
 
 ////
@@ -115,7 +114,7 @@ func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
 	}
 
 	// --
-	var nvterm string
+	/*var nvterm string
 	if nv := nbox.text; len(nv) > 0 && len(nv) < 100 {
 		/// ! FIXME: Golog's TermReader requires `s` to be less than 1000 symbols
 		/// TODO: implement as TermReader, rather than io.Reader
@@ -125,14 +124,15 @@ func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
 		nvcodes := term.NewCodeListFromDoubleQuotedString(
 			strings.Replace(`"`+nv+`"`, "\n", "\\n", -1))
 		nvterm = fmt.Sprintf(`node(%d, value(%s)).`+"\n", nbox.n.NodeID, nvcodes.String())
-	}
+	}*/
 
 	// --
-	nboxterm := fmt.Sprintf("node(%d, rect(%.1f, %.1f, %.1f, %.1f)).\n", nbox.n.NodeID,
-		nrect[0], nrect[1], nrect[2], nrect[3])
+	/*nboxterm := fmt.Sprintf("node(%d, rect(%.1f, %.1f, %.1f, %.1f)).\n", nbox.n.NodeID,
+	nrect[0], nrect[1], nrect[2], nrect[3])*/
 
 	// --
-	nterms := nboxterm + nvterm
+	//nterms := nboxterm + nvterm
+	nterms := fmt.Sprintf("node(%d).\n", nbox.n.NodeID)
 	//fmt.Print(nterms) /// temporary!
 	copy(s, nterms)
 	return len(nterms), nil
@@ -155,7 +155,7 @@ func TestTextBlock(ctx Context, c *CDP, cclient *CDPClient) {
 		}
 	}()
 
-	//pl = pl.Consult(DOMNodeRectReader{boxes})
+	pl = pl.Consult(DOMNodeRectReader{boxes})
 	//log.Println(pl.ProveAll("node(Id, rect(0.0, T, W, H))."))
 
 	log.Printf("^^^^^ URL: %s ^^^^^\n", pageURL)

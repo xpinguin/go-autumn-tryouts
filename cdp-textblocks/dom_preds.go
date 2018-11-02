@@ -2,11 +2,15 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/mndrix/golog"
 	"github.com/mndrix/golog/term"
-	//"github.com/chromedp/cdproto/dom"
+
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
+	chro "github.com/chromedp/chromedp"
 )
 
 type (
@@ -65,20 +69,65 @@ func NodeContent2(m Machine, args []Term) ForeignReturn {
 	if !term.IsInteger(args[0]) {
 		panic("node_content/2: first argument must be an integer NodeID")
 	}
-	//nodeId := args[0].(*term.Integer)
+	nodeId := DOMNodeID(args[0].(*term.Integer).Value().Int64())
 
 	c, ctx := getCDPContext(m)
-	log.Println(c, ctx)
-	//n, err := dom.DescribeNode().WithNodeID(nodeId).Do(ctx, h)
+	var nodeText string
 
-	return golog.ForeignFail()
+	err := c.Run(ctx, chro.Tasks{
+		c.SetTarget(0),
+		chro.ActionFunc(func(ctx Context, h cdp.Executor) (err error) {
+			n, err := dom.DescribeNode().WithNodeID(nodeId).Do(ctx, h)
+			if err == nil {
+				log.Println(n)
+				chro.EvaluateAsDevTools(fmt.Sprintf(textJS, n.FullXPath()), &nodeText)
+			} else {
+				log.Println("{ERR}", err)
+			}
+			return
+		}),
+	})
+	if err != nil {
+		panic(fmt.Sprintf("{ERR} CDP.Run(...): %v", err))
+	}
+
+	return golog.ForeignUnify(args[1], term.NewCodeList(nodeText))
 }
 
-// node_contentquad(+NodeID, ?Text)
+// node_contentquad(+NodeID, ?dom.Quad)
 func NodeContentQuad2(m Machine, args []Term) ForeignReturn {
-	return golog.ForeignFail()
+	if !term.IsInteger(args[0]) {
+		panic("node_content/2: first argument must be an integer NodeID")
+	}
+	nodeId := DOMNodeID(args[0].(*term.Integer).Value().Int64())
+
+	c, ctx := getCDPContext(m)
+	var q dom.Quad
+
+	err := c.Run(ctx, chro.Tasks{
+		c.SetTarget(0),
+		chro.ActionFunc(func(ctx Context, h cdp.Executor) (err error) {
+			nbox, err := dom.GetBoxModel().WithNodeID(nodeId).Do(ctx, h)
+			if err == nil {
+				q = nbox.Content
+			}
+			return
+		}),
+	})
+	if err != nil {
+		panic(fmt.Sprintf("{ERR} CDP.Run(...): %v", err))
+	}
+
+	var qterm term.Term
+	if len(q) == 0 {
+		qterm = term.NewAtom("NoQuad")
+	} else {
+		qterm = term.NewCallable("Quad", term.NewFloat64(q[0]), term.NewFloat64(q[1]), term.NewFloat64(q[2]), term.NewFloat64(q[3]))
+	}
+	return golog.ForeignUnify(args[1], qterm)
 }
 
+// node_contentquad(+NodeID, ?dom.BoxModel)
 func NodeBoxModel2(m Machine, args []Term) ForeignReturn {
 	return golog.ForeignFail()
 }
