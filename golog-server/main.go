@@ -21,33 +21,51 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 	in := bufio.NewReader(in_)
 	m := golog.NewInteractiveMachine()
 
-	for {
+	for inClosed := false; !inClosed; {
 		fmt.Fprintf(out, "?- ")
 		// --
-		var query string
-		for {
-			s, err := in.ReadString('\n')
+		rs, err := func() (r interface{}, err error) {
+			// read logical line
+			var query, s string
+			for {
+				s, err = in.ReadString('\n')
+				if err == io.EOF {
+					log.Printf("Input stream closed. Stopping CLI")
+					inClosed = true
+					return
+				} else if err != nil {
+					log.Printf("{ERR} ReadString: %v", err)
+					return
+				}
+
+				query += strings.TrimSpace(s)
+				if len(query) == 0 || (len(query) > 0 && query[len(query)-1] == '.') {
+					fprintf(out, "<<< [0] '%s'", query)
+					break
+				}
+			}
+
+			// parse line & feed into the Prolog engine
+			defer func() {
+				if exc := recover(); exc != nil {
+					r = exc
+				}
+			}()
+
+			goal, err := gologrdr.Term(query)
 			if err != nil {
-				log.Printf("{ERR} ReadString: %v", err)
-				break
+				fprintf(out, "Problem parsing the query: %s", err)
+				return
 			}
-			// --
-			query += strings.TrimSpace(s)
-			if query[len(query)-1] == '.' {
-				fprintf(out, "<<< [0] '%s'", query)
-				break
-			}
-		}
+
+			fprintf(out, "<<< [1] '%v'", goal)
+			r = m.ProveAll(goal)
+			return
+		}()
 		// --
-		goal, err := gologrdr.Term(query)
-		if err != nil {
-			fprintf(out, "Problem parsing the query: %s", err)
-			continue
+		if err == nil {
+			fprintf(out, "[RESULT] '%v'", rs)
 		}
-		fprintf(out, "<<< [1] '%v'", goal)
-		// --
-		rs := m.ProveAll(goal)
-		fprintf(out, "<<< [RESULT] '%v'", rs)
 	}
 }
 
