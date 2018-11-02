@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 
-	"github.com/mndrix/golog"
+	//"github.com/mndrix/golog"
 	"github.com/mndrix/golog/term"
 )
 
@@ -115,7 +116,7 @@ func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
 
 	// --
 	var nvterm string
-	if nv := nbox.text; len(nv) > 0 && len(nv) < 200 {
+	if nv := nbox.text; len(nv) > 0 && len(nv) < 100 {
 		/// ! FIXME: Golog's TermReader requires `s` to be less than 1000 symbols
 		/// TODO: implement as TermReader, rather than io.Reader
 		///
@@ -132,14 +133,14 @@ func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
 
 	// --
 	nterms := nboxterm + nvterm
-	fmt.Print(nterms) /// temporary!
+	//fmt.Print(nterms) /// temporary!
 	copy(s, nterms)
 	return len(nterms), nil
 }
 
 //// TEST
 func TestTextBlock(ctx Context, c *CDP, cclient *CDPClient) {
-	pl := golog.NewMachine()
+	pl := NewDOMMachine(c, ctx)
 
 	var pageURL string
 	var err error
@@ -154,9 +155,11 @@ func TestTextBlock(ctx Context, c *CDP, cclient *CDPClient) {
 		}
 	}()
 
-	pl = pl.Consult(DOMNodeRectReader{boxes})
-	log.Println(pl.ProveAll("node(Id, rect(0.0, T, W, H))."))
+	//pl = pl.Consult(DOMNodeRectReader{boxes})
+	//log.Println(pl.ProveAll("node(Id, rect(0.0, T, W, H))."))
 
 	log.Printf("^^^^^ URL: %s ^^^^^\n", pageURL)
 	//fmt.Println(pl.ProveAll("listing."))
+
+	RunPrologCLI(pl, os.Stdin, os.Stdout)
 }
