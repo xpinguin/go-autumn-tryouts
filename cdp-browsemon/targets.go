@@ -23,7 +23,7 @@ type BrowserContext struct {
 	ctxCancel *context.CancelFunc
 
 	targetsStream  <-chan Target
-	handlersStream chan *TargetHandler
+	handlersStream chan *TargetHandler // TODO: locking
 }
 
 func DialBrowser(host string, port int) BrowserContext {
@@ -35,7 +35,7 @@ func DialBrowser(host string, port int) BrowserContext {
 }
 
 // :: BrowserContext -> Stream Target
-func (b BrowserContext) PageTargets() <-chan Target {
+func (b *BrowserContext) PageTargets() <-chan Target {
 	if b.targetsStream == nil {
 		b.targetsStream = b.browser.WatchPageTargets(b.ctx)
 	}
@@ -44,7 +44,7 @@ func (b BrowserContext) PageTargets() <-chan Target {
 
 // :: Target -> TargetHandler
 func (b BrowserContext) RunTargetHandler(t Target) *TargetHandler {
-	h, err := chromedp.NewTargetHandler(t, DummyPrintf, DummyPrintf, log.Fatalf)
+	h, err := chromedp.NewTargetHandler(t, DummyPrintf, DummyPrintf, log.Printf)
 	if err != nil {
 		log.Printf("{ERR} NewTargetHandler(...): %v", err)
 		return nil
@@ -57,7 +57,7 @@ func (b BrowserContext) RunTargetHandler(t Target) *TargetHandler {
 }
 
 // :: BrowserContext -> Stream TargetHandler
-func (b BrowserContext) PageHandlers() <-chan *TargetHandler {
+func (b *BrowserContext) PageHandlers() <-chan *TargetHandler {
 	if b.handlersStream != nil {
 		return b.handlersStream
 	}
