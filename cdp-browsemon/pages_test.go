@@ -2,7 +2,6 @@ package browsemon
 
 import (
 	"fmt"
-	//"log"
 	T "testing"
 )
 
@@ -10,15 +9,15 @@ func TestPageDOMTree(t *T.T) {
 	b := dialBrowser()
 	func() {
 		for th := range b.PageHandlers() {
-			p := NewPageContext(th, &b)
-			for locns := range p.DOMNodes() {
-				fmt.Printf("LOCATION: %s\n\n", locns.Loc)
-				for nb := range p.BoxModels(locns.Tree) {
-					fmt.Printf("'%v'\n", nb.box.Content)
+			go func(th *TargetHandler) {
+				p := NewPageContext(th, &b)
+				for locns := range p.DOMNodes() {
+					for nb := range p.BoxModels(locns.Tree) {
+						fmt.Printf("<%s> %s[%d]: %v\n", locns.Loc,
+							nb.n.NodeName, nb.n.NodeID, nb.box.Content)
+					}
 				}
-			}
-			fmt.Printf("\n---------\n")
-			break
+			}(th)
 		}
 	}()
 	//sleep(5)
