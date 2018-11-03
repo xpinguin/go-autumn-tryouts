@@ -1,12 +1,10 @@
-// golog-server
-package main
+package server
 
 import (
 	"bufio"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"strings"
 
 	"github.com/mndrix/golog"
@@ -18,9 +16,8 @@ func fprintf(f interface{ io.Writer }, s string, opts ...interface{}) {
 	fmt.Fprintf(f, s+"\r\n", opts...)
 }
 
-func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
+func RunPrologCLI(m golog.Machine, in_ interface{ io.Reader }, out interface{ io.Writer }) {
 	in := bufio.NewReader(in_)
-	m := golog.NewInteractiveMachine()
 
 	for inClosed := false; !inClosed; {
 		fmt.Fprintf(out, "?- ")
@@ -72,6 +69,7 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 				return
 			}
 			////
+			var rlines string
 			for i, b := range bindings {
 				lines := make([]string, 0)
 				goalvars.ForEach(func(name string, variable interface{}) {
@@ -81,13 +79,16 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 					lines = append(lines, line)
 				})
 
+				var finsuff string
 				if i == len(bindings)-1 {
-					lines[len(lines)-1] += "\t."
+					finsuff = "."
 				} else {
-					lines[len(lines)-1] += "\t;"
+					finsuff = ";"
 				}
-				r = strings.Join(lines, "\r\n")
+
+				rlines += strings.Join(lines, "\r\n") + "\t" + finsuff + "\r\n"
 			}
+			r = rlines
 			return
 		}()
 		// --
@@ -95,22 +96,5 @@ func RunPrologCLI(in_ interface{ io.Reader }, out interface{ io.Writer }) {
 			continue // TODO: indicate somewhere
 		}
 		fprintf(out, "%v", ans)
-	}
-}
-
-func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:4567")
-	if err != nil {
-		log.Fatalln("{ERR} net.Listen(...):", err)
-	}
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			log.Println("{ERR} Accept():", err)
-			continue
-		}
-		// --
-		log.Printf("Starting CLI for client: %v", c.RemoteAddr())
-		go RunPrologCLI(c, c)
 	}
 }
