@@ -22,7 +22,8 @@ type BrowserContext struct {
 	ctx       Context
 	ctxCancel *context.CancelFunc
 
-	targetsStream <-chan Target
+	targetsStream  <-chan Target
+	handlersStream chan *TargetHandler
 }
 
 func DialBrowser(host string, port int) BrowserContext {
@@ -30,7 +31,7 @@ func DialBrowser(host string, port int) BrowserContext {
 	return BrowserContext{
 		client.New(client.URL(fmt.Sprintf("http://%s:%d/json", host, port))),
 		ctx, &ctxCancel,
-		nil}
+		nil, nil}
 }
 
 // :: BrowserContext -> Stream Target
@@ -43,7 +44,7 @@ func (b BrowserContext) PageTargetsStream() <-chan Target {
 
 // :: Target -> TargetHandler
 func (b BrowserContext) RunTargetHandler(t Target) *TargetHandler {
-	h, err := chromedp.NewTargetHandler(t, log.Printf, log.Printf, log.Fatalf)
+	h, err := chromedp.NewTargetHandler(t, DummyPrintf, DummyPrintf, log.Fatalf)
 	if err != nil {
 		log.Printf("{ERR} NewTargetHandler(...): %v", err)
 		return nil
@@ -53,4 +54,28 @@ func (b BrowserContext) RunTargetHandler(t Target) *TargetHandler {
 		return nil
 	}
 	return h
+}
+
+// :: BrowserContext -> Stream TargetHandler
+func (b BrowserContext) PageHandlersStream() <-chan *TargetHandler {
+	if b.handlersStream != nil {
+		return b.handlersStream
+	}
+	b.handlersStream = make(chan *TargetHandler)
+
+	go func(ts <-chan Target, hs chan<- *TargetHandler) {
+		defer func() {
+			close(b.handlersStream)
+			b.handlersStream = nil
+		}()
+		///
+		for t := range ts {
+			h := b.RunTargetHandler(t)
+			if h != nil {
+				hs <- h
+			}
+		}
+	}(b.PageTargetsStream(), b.handlersStream)
+
+	return b.handlersStream
 }
