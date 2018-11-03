@@ -35,7 +35,7 @@ func DialBrowser(host string, port int) BrowserContext {
 }
 
 // :: BrowserContext -> Stream Target
-func (b BrowserContext) PageTargetsStream() <-chan Target {
+func (b BrowserContext) PageTargets() <-chan Target {
 	if b.targetsStream == nil {
 		b.targetsStream = b.browser.WatchPageTargets(b.ctx)
 	}
@@ -57,7 +57,7 @@ func (b BrowserContext) RunTargetHandler(t Target) *TargetHandler {
 }
 
 // :: BrowserContext -> Stream TargetHandler
-func (b BrowserContext) PageHandlersStream() <-chan *TargetHandler {
+func (b BrowserContext) PageHandlers() <-chan *TargetHandler {
 	if b.handlersStream != nil {
 		return b.handlersStream
 	}
@@ -75,7 +75,7 @@ func (b BrowserContext) PageHandlersStream() <-chan *TargetHandler {
 				hs <- h
 			}
 		}
-	}(b.PageTargetsStream(), b.handlersStream)
+	}(b.PageTargets(), b.handlersStream)
 
 	return b.handlersStream
 }

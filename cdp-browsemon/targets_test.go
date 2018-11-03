@@ -17,7 +17,7 @@ func sleep(seconds int) {
 func TestListTabs(t *T.T) {
 	b := dialBrowser()
 	go func() {
-		for th := range b.PageHandlersStream() {
+		for th := range b.PageHandlers() {
 			log.Printf("<PageHandler>: %v", th)
 		}
 	}()
@@ -27,14 +27,13 @@ func TestListTabs(t *T.T) {
 func TestTabRoot(t *T.T) {
 	b := dialBrowser()
 	go func() {
-		for th := range b.PageHandlersStream() {
+		for th := range b.PageHandlers() {
 			root, err := th.GetRoot(b.ctx)
 			if err != nil {
 				t.Fatal("{ERR} GetRoot(ctx): ", err)
 			}
 			log.Printf("root DOM Node: %v", root)
 			log.Printf("root children: %v", root.Children)
-			break // one tab is enough
 		}
 	}()
 	sleep(5)
