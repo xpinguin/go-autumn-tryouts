@@ -1,5 +1,5 @@
-// Prolog predicates for querying the DOM tree
-package main
+// Prolog predicates for querying browser, pages (tabs) and DOM-tree
+package browsemon
 
 import (
 	"fmt"

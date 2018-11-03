@@ -1,5 +1,5 @@
 // Opaque prolog atom for holding golang's values
-package main
+package browsemon
 
 import (
 	"fmt"
