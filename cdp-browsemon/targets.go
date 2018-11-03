@@ -57,6 +57,8 @@ func (b BrowserContext) RunTargetHandler(t Target) *TargetHandler {
 }
 
 // :: BrowserContext -> Stream TargetHandler
+// OR
+// :: Stream Target -> Stream TargetHandler
 func (b *BrowserContext) PageHandlers() <-chan *TargetHandler {
 	if b.handlersStream != nil {
 		return b.handlersStream
