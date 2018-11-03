@@ -76,10 +76,10 @@ func (p *PageContext) DOMNodes() <-chan LocationDOMTree {
 			lns := LocationDOMTree{p.Location(), nodes}
 
 			/// --
-			go func(ns chan<- *DOMNode, done chan<- struct{}) {
+			go func(ns chan<- *DOMNode, done <-chan struct{}) {
 				defer func() {
-					defer recover()
-					done <- struct{}{} // FIXME
+					close(ns)
+					<-done
 				}()
 				///
 				root, err := p.page.GetRoot(p.ctx)
@@ -97,7 +97,13 @@ func (p *PageContext) DOMNodes() <-chan LocationDOMTree {
 				front := []*DOMNode{root}
 				for len(front) > 0 {
 					n := front[0]
-					ns <- n
+					select {
+					case ns <- n:
+					case _, ok := <-done:
+						if ok {
+							return
+						}
+					}
 					front = append(front[1:], n.Children...)
 				}
 			}(nodes, done)
@@ -111,12 +117,9 @@ func (p *PageContext) DOMNodes() <-chan LocationDOMTree {
 						log.Printf("%v != %v", p.Location(), lns.Loc)
 						sameLoc = false
 					}
-				case _, ok := <-done:
-					if ok {
-						close(nodes)
-					}
 				}
 			}
+			done <- struct{}{}
 			close(done)
 		}
 	}(p.domNodesStream)
