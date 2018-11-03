@@ -66,6 +66,12 @@ func getCDPContext(m Machine) (cdp *CDP, ctx Context) {
 
 // node_content(+NodeID, ?Text)
 func NodeContent2(m Machine, args []Term) ForeignReturn {
+	/*if !term.IsString(args[0]) {
+		panic("node_content/2: first argument must be an XPath")
+	}
+	nodeXPath := args[0].String()
+	log.Printf("nodeXPath: %s", nodeXPath)*/
+
 	if !term.IsInteger(args[0]) {
 		panic("node_content/2: first argument must be an integer NodeID")
 	}
@@ -75,21 +81,26 @@ func NodeContent2(m Machine, args []Term) ForeignReturn {
 	var nodeText string
 
 	err := c.Run(ctx, chro.Tasks{
-		c.SetTarget(0),
+		//c.SetTarget(0),
 		chro.ActionFunc(func(ctx Context, h cdp.Executor) (err error) {
 			n, err := dom.DescribeNode().WithNodeID(nodeId).Do(ctx, h)
-			if err == nil {
-				log.Println(n)
-				chro.EvaluateAsDevTools(fmt.Sprintf(textJS, n.FullXPath()), &nodeText)
-			} else {
+			if err != nil {
 				log.Println("{ERR}", err)
+				return
 			}
+			err = chro.EvaluateAsDevTools(fmt.Sprintf(textJS, n.FullXPath()), &nodeText).Do(ctx, h)
+			log.Printf("XPath = %v ;; nodeText = %v ;; err = %v", n.FullXPath(), nodeText, err)
 			return
 		}),
 	})
 	if err != nil {
 		panic(fmt.Sprintf("{ERR} CDP.Run(...): %v", err))
 	}
+
+	/*err := c.Run(ctx, chro.EvaluateAsDevTools(fmt.Sprintf(textJS, nodeXPath), &nodeText))
+	if err != nil {
+		panic(fmt.Sprintf("{ERR} CDP.Run(...): %v", err))
+	}*/
 
 	return golog.ForeignUnify(args[1], term.NewCodeList(nodeText))
 }

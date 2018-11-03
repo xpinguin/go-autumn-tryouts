@@ -5,9 +5,11 @@ import (
 	"io"
 	"log"
 	"os"
+
 	//"strings"
 	//"github.com/mndrix/golog"
 	//"github.com/mndrix/golog/term"
+	"github.com/xpinguin/go-autumn-tryouts/golog-server"
 )
 
 ////
@@ -132,8 +134,9 @@ func (rr DOMNodeRectReader) Read(s []byte) (int, error) {
 
 	// --
 	//nterms := nboxterm + nvterm
-	nterms := fmt.Sprintf("node(%d).\n", nbox.n.NodeID)
-	//fmt.Print(nterms) /// temporary!
+	nterms := fmt.Sprintf("node(%d).\n", nbox.n.NodeID) +
+		fmt.Sprintf(`node_xpath(%d, "%s").`+"\n", nbox.n.NodeID, nbox.n.FullXPath())
+	fmt.Print(nterms) /// temporary!
 	copy(s, nterms)
 	return len(nterms), nil
 }
@@ -161,5 +164,5 @@ func TestTextBlock(ctx Context, c *CDP, cclient *CDPClient) {
 	log.Printf("^^^^^ URL: %s ^^^^^\n", pageURL)
 	//fmt.Println(pl.ProveAll("listing."))
 
-	RunPrologCLI(pl, os.Stdin, os.Stdout)
+	server.RunPrologCLI(pl, os.Stdin, os.Stdout)
 }
