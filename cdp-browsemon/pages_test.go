@@ -13,8 +13,8 @@ func TestPageDOMTree(t *T.T) {
 			p := NewPageContext(th, &b)
 			for locns := range p.DOMNodes() {
 				fmt.Printf("LOCATION: %s\n\n", locns.Loc)
-				for n := range locns.Tree {
-					fmt.Printf("'%v'\n\n", n.NodeValue)
+				for nb := range p.BoxModels(locns.Tree) {
+					fmt.Printf("'%v'\n", nb.box.Content)
 				}
 			}
 			fmt.Printf("\n---------\n")

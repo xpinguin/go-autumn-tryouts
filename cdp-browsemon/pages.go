@@ -123,3 +123,28 @@ func (p *PageContext) DOMNodes() <-chan LocationDOMTree {
 
 	return p.domNodesStream
 }
+
+type DOMNodeBoxModel struct {
+	n   *DOMNode
+	box *dom.BoxModel
+}
+
+// :: Stream DOMNode -> Stream (DOMNode, dom.BoxModel)
+func (p *PageContext) BoxModels(ns <-chan *DOMNode) <-chan DOMNodeBoxModel {
+	bs := make(chan DOMNodeBoxModel)
+	go func(bs chan<- DOMNodeBoxModel) {
+		defer func() {
+			close(bs)
+		}()
+		///
+		for n := range ns {
+			nbox, err := dom.GetBoxModel().WithNodeID(n.NodeID).Do(p.ctx, p.page)
+			if err != nil {
+				//log.Printf("{ERR} <%s>: %v", n.NodeName, err)
+				continue
+			}
+			bs <- DOMNodeBoxModel{n, nbox}
+		}
+	}(bs)
+	return bs
+}
